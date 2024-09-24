@@ -19,36 +19,49 @@ export default function VoiceNotes() {
   const recognitionRef = useRef<SpeechRecognition | null>(null)
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-      recognitionRef.current = new SpeechRecognition()
-      recognitionRef.current.continuous = true
-      recognitionRef.current.interimResults = true
+  if (
+    typeof window !== 'undefined' &&
+    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+  ) {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = true;
+    recognitionRef.current.interimResults = true;
 
-      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
-  let transcript = '';
+    recognitionRef.current.onresult = (event) => {
+      let transcript = '';
 
-  for (let i = event.resultIndex; i < event.results.length; i++) {
-    const result = event.results[i];
-    const alternative = result[0];
-    transcript += alternative.transcript;
-  }
-
-  setCurrentTranscript(transcript);
-
-  if (event.results[event.results.length - 1].isFinal) {
-    setNotes((prevNotes) => [...prevNotes, transcript]);
-    setCurrentTranscript('');
-  }
-};
-    }
-
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop()
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        const alternative = result[0];
+        transcript += alternative.transcript;
       }
+
+      setCurrentTranscript(transcript);
+
+      if (event.results[event.results.length - 1].isFinal) {
+        setNotes((prevNotes) => [...prevNotes, transcript]);
+        setCurrentTranscript('');
+      }
+    };
+
+    // Add the onend handler here
+    recognitionRef.current.onend = () => {
+      if (currentTranscript.trim() !== '') {
+        setNotes((prevNotes) => [...prevNotes, currentTranscript]);
+        setCurrentTranscript('');
+      }
+    };
+  }
+
+  return () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
     }
-  }, [])
+  };
+}, []);
+
 
   const toggleRecording = () => {
     if (isRecording) {
