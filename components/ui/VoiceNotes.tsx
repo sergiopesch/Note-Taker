@@ -68,7 +68,7 @@ export default function VoiceNotes() {
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4 sm:p-8 font-sans flex items-center justify-center">
       <Card className="w-full max-w-md bg-white/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0">
         <CardContent className="p-6 sm:p-8">
-          <h1 className="text-3xl font-semibold text-gray-800 mb-8 text-center">Voice Notes</h1>
+          <h1 className="text-3xl font-semibold text-gray-800 mb-8 text-center">Personal Note Taker</h1>
           <div className="space-y-8">
             <div className="flex flex-col items-center justify-center">
               <Button
