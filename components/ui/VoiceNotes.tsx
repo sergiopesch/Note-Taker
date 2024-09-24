@@ -14,9 +14,9 @@ const PulsingAnimation = () => (
 
 export default function VoiceNotes() {
   const [isRecording, setIsRecording] = useState(false)
-  const [notes, setNotes] = useState<string[]>([])
   const [currentTranscript, setCurrentTranscript] = useState('')
   const [fullTranscript, setFullTranscript] = useState('')
+  const [showFullTranscript, setShowFullTranscript] = useState(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const finalTranscriptRef = useRef('') // To accumulate final transcripts
 
@@ -45,9 +45,6 @@ export default function VoiceNotes() {
           }
         }
 
-        // Update fullTranscript state
-        setFullTranscript(finalTranscriptRef.current)
-
         // Update currentTranscript with last 500 characters
         const combinedTranscript = finalTranscriptRef.current + interimTranscript
         setCurrentTranscript(combinedTranscript.slice(-500))
@@ -55,10 +52,10 @@ export default function VoiceNotes() {
 
       recognitionRef.current.onend = () => {
         if (finalTranscriptRef.current.trim() !== '') {
-          setNotes((prevNotes) => [...prevNotes, finalTranscriptRef.current])
+          setFullTranscript(finalTranscriptRef.current)
           finalTranscriptRef.current = '' // Reset the ref
+          setShowFullTranscript(true)
         }
-        setFullTranscript('')
         setCurrentTranscript('')
         setIsRecording(false) // Ensure recording state is updated
       }
@@ -70,7 +67,7 @@ export default function VoiceNotes() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Add empty dependency array to run only once
+  }, []) // Run once on mount
 
   const toggleRecording = () => {
     if (isRecording) {
@@ -79,23 +76,20 @@ export default function VoiceNotes() {
       finalTranscriptRef.current = '' // Reset the ref when starting
       setFullTranscript('')
       setCurrentTranscript('')
+      setShowFullTranscript(false)
       recognitionRef.current?.start()
     }
     setIsRecording(!isRecording)
   }
 
-  const deleteNote = (index: number) => {
-    setNotes((prevNotes) => prevNotes.filter((_, i) => i !== index))
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4 sm:p-8 font-sans flex items-center justify-center">
-      <Card className="w-full max-w-md bg-white/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0">
-        <CardContent className="p-6 sm:p-8">
-          <h1 className="text-3xl font-semibold text-gray-800 mb-8 text-center">
+      <Card className="w-full max-w-md h-[700px] bg-white/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0">
+        <CardContent className="p-6 sm:p-8 h-full flex flex-col">
+          <h1 className="text-3xl font-semibold text-gray-800 mb-4 text-center">
             Personal Note Taker
           </h1>
-          <div className="space-y-8">
+          <div className="flex-grow flex flex-col space-y-4 overflow-hidden">
             <div className="flex flex-col items-center justify-center">
               <Button
                 onClick={toggleRecording}
@@ -121,37 +115,28 @@ export default function VoiceNotes() {
                 </div>
               )}
             </div>
+
             {isRecording && (
-              <div className="bg-blue-100 rounded-2xl p-4 transition-all duration-300 shadow-md">
+              <div className="bg-blue-100 rounded-2xl p-4 transition-all duration-300 shadow-md overflow-y-auto max-h-40">
                 <h2 className="text-lg font-semibold text-blue-800 mb-2 text-center">
                   Live Transcript
                 </h2>
-                <p className="text-blue-900 text-center">
+                <div className="text-blue-900 text-center">
                   {currentTranscript || 'Listening...'}
-                </p>
+                </div>
               </div>
             )}
-            <div className="space-y-4 max-h-96 overflow-y-auto">
-              {notes.map((note, index) => (
-                <div
-                  key={index}
-                  className="group bg-gray-100 rounded-2xl p-4 transition-all duration-300 hover:shadow-md"
-                >
-                  <div className="flex justify-between items-start">
-                    <p className="text-gray-800 flex-grow">{note}</p>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteNote(index)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                    >
-                      <Trash2 className="w-5 h-5 text-gray-500 hover:text-red-500" />
-                      <span className="sr-only">Delete note</span>
-                    </Button>
-                  </div>
+
+            {showFullTranscript && !isRecording && (
+              <div className="bg-green-100 rounded-2xl p-4 transition-all duration-300 shadow-md overflow-y-auto flex-grow">
+                <h2 className="text-lg font-semibold text-green-800 mb-2 text-center">
+                  Full Transcript
+                </h2>
+                <div className="text-green-900 whitespace-pre-wrap">
+                  {fullTranscript}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
