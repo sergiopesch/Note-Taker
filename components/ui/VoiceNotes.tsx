@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { Mic, MicOff, Trash2 } from 'lucide-react'
 
 const PulsingAnimation = () => (
@@ -16,79 +16,92 @@ export default function VoiceNotes() {
   const [isRecording, setIsRecording] = useState(false)
   const [notes, setNotes] = useState<string[]>([])
   const [currentTranscript, setCurrentTranscript] = useState('')
+  const [fullTranscript, setFullTranscript] = useState('')
   const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const finalTranscriptRef = useRef('') // To accumulate final transcripts
 
   useEffect(() => {
-  if (
-    typeof window !== 'undefined' &&
-    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
-  ) {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = true;
-    recognitionRef.current.interimResults = true;
+    if (
+      typeof window !== 'undefined' &&
+      ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+    ) {
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition
+      recognitionRef.current = new SpeechRecognition()
+      recognitionRef.current.continuous = true
+      recognitionRef.current.interimResults = true
 
-    recognitionRef.current.onresult = (event) => {
-      let transcript = '';
+      recognitionRef.current.onresult = (event) => {
+        let interimTranscript = ''
 
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        const alternative = result[0];
-        transcript += alternative.transcript;
+        // Process results starting from event.resultIndex
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i]
+          const transcript = result[0].transcript
+          if (result.isFinal) {
+            finalTranscriptRef.current += transcript
+          } else {
+            interimTranscript += transcript
+          }
+        }
+
+        // Update fullTranscript state
+        setFullTranscript(finalTranscriptRef.current)
+
+        // Update currentTranscript with last 500 characters
+        const combinedTranscript = finalTranscriptRef.current + interimTranscript
+        setCurrentTranscript(combinedTranscript.slice(-500))
       }
 
-      setCurrentTranscript(transcript);
-
-      if (event.results[event.results.length - 1].isFinal) {
-        setNotes((prevNotes) => [...prevNotes, transcript]);
-        setCurrentTranscript('');
+      recognitionRef.current.onend = () => {
+        if (finalTranscriptRef.current.trim() !== '') {
+          setNotes((prevNotes) => [...prevNotes, finalTranscriptRef.current])
+          finalTranscriptRef.current = '' // Reset the ref
+        }
+        setFullTranscript('')
+        setCurrentTranscript('')
+        setIsRecording(false) // Ensure recording state is updated
       }
-    };
-
-    // Add the onend handler here
-    recognitionRef.current.onend = () => {
-      if (currentTranscript.trim() !== '') {
-        setNotes((prevNotes) => [...prevNotes, currentTranscript]);
-        setCurrentTranscript('');
-      }
-    };
-  }
-
-  return () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
     }
-  };
-}, []);
 
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop()
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Add empty dependency array to run only once
 
   const toggleRecording = () => {
     if (isRecording) {
       recognitionRef.current?.stop()
-      setCurrentTranscript('')
     } else {
+      finalTranscriptRef.current = '' // Reset the ref when starting
+      setFullTranscript('')
+      setCurrentTranscript('')
       recognitionRef.current?.start()
     }
     setIsRecording(!isRecording)
   }
 
   const deleteNote = (index: number) => {
-    setNotes(prevNotes => prevNotes.filter((_, i) => i !== index))
+    setNotes((prevNotes) => prevNotes.filter((_, i) => i !== index))
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4 sm:p-8 font-sans flex items-center justify-center">
       <Card className="w-full max-w-md bg-white/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0">
         <CardContent className="p-6 sm:p-8">
-          <h1 className="text-3xl font-semibold text-gray-800 mb-8 text-center">Personal Note Taker</h1>
+          <h1 className="text-3xl font-semibold text-gray-800 mb-8 text-center">
+            Personal Note Taker
+          </h1>
           <div className="space-y-8">
             <div className="flex flex-col items-center justify-center">
               <Button
                 onClick={toggleRecording}
                 className={`w-16 h-16 rounded-full transition-all duration-300 ease-in-out flex items-center justify-center ${
-                  isRecording 
-                    ? 'bg-red-500 hover:bg-red-600 text-white' 
+                  isRecording
+                    ? 'bg-red-500 hover:bg-red-600 text-white'
                     : 'bg-blue-500 hover:bg-blue-600 text-white'
                 } shadow-md`}
               >
@@ -97,7 +110,9 @@ export default function VoiceNotes() {
                 ) : (
                   <Mic className="w-8 h-8" />
                 )}
-                <span className="sr-only">{isRecording ? 'Stop Recording' : 'Start Recording'}</span>
+                <span className="sr-only">
+                  {isRecording ? 'Stop Recording' : 'Start Recording'}
+                </span>
               </Button>
               {isRecording && (
                 <div className="mt-4 flex items-center gap-2">
@@ -108,13 +123,20 @@ export default function VoiceNotes() {
             </div>
             {isRecording && (
               <div className="bg-blue-100 rounded-2xl p-4 transition-all duration-300 shadow-md">
-                <h2 className="text-lg font-semibold text-blue-800 mb-2 text-center">Live Transcript</h2>
-                <p className="text-blue-900 text-center">{currentTranscript || 'Listening...'}</p>
+                <h2 className="text-lg font-semibold text-blue-800 mb-2 text-center">
+                  Live Transcript
+                </h2>
+                <p className="text-blue-900 text-center">
+                  {currentTranscript || 'Listening...'}
+                </p>
               </div>
             )}
             <div className="space-y-4 max-h-96 overflow-y-auto">
               {notes.map((note, index) => (
-                <div key={index} className="group bg-gray-100 rounded-2xl p-4 transition-all duration-300 hover:shadow-md">
+                <div
+                  key={index}
+                  className="group bg-gray-100 rounded-2xl p-4 transition-all duration-300 hover:shadow-md"
+                >
                   <div className="flex justify-between items-start">
                     <p className="text-gray-800 flex-grow">{note}</p>
                     <Button
