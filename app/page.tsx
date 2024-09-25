@@ -151,7 +151,7 @@ export default function Home() {
         <Card className="w-full bg-white/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0 mb-8">
           <CardContent className="p-6 sm:p-8 h-full flex flex-col items-center">
             <h1 className="text-4xl font-bold mb-6 text-center text-gray-800">
-              Voice Notes
+              Note Taker
             </h1>
             <div className="mb-6">
               {isRecording ? (

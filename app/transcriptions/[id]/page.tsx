@@ -144,7 +144,11 @@ export default function TranscriptionDetail() {
                       {nextSteps}
                     </div>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="text-center text-gray-600">
+                    Next Steps are unavailable.
+                  </div>
+                )}
 
                 {/* Action Buttons */}
                 <div className="mt-4 flex justify-around">
