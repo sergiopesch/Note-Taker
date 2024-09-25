@@ -3,8 +3,8 @@
 import '@/app/globals.css';
 
 export const metadata = {
-  title: 'Voice Notes App',
-  description: 'An app for taking voice notes',
+  title: 'Note Taker App',
+  description: 'An app to help you take notes of your ideas',
 };
 
 export default function RootLayout({

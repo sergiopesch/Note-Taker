@@ -17,7 +17,7 @@ export default async function handler(
     apiKey: process.env.OPENAI_API_KEY,
   })
 
-  const prompt = `Please provide a short and precise title (max 10 words), a concise summary, and next steps for the following transcription:
+  const prompt = `Please provide a short and precise title (max 8 words), a concise summary, and next steps if you find any for the following transcription:
 
 "${transcriptionText}"
 
@@ -31,7 +31,7 @@ Title:
   while (retryCount < maxRetries) {
     try {
       const response = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 250,
         temperature: 0.7,

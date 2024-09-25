@@ -87,8 +87,8 @@ export default function TranscriptionDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4 sm:p-8 font-sans">
-      <div className="w-full max-w-md mx-auto">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4 sm:p-8 font-sans flex items-center justify-center">
+      <div className="w-full max-w-3xl">
         <Card className="w-full bg-white/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0">
           <CardContent className="p-6 sm:p-8 h-full flex flex-col">
             {transcription ? (
@@ -104,9 +104,7 @@ export default function TranscriptionDetail() {
                   />
                 </div>
                 <div className="flex-grow bg-green-100 rounded-2xl p-4 shadow-md overflow-y-auto mb-4">
-                  <div className="text-sm text-gray-600 mb-2">
-                    {transcription.date}
-                  </div>
+                  <div className="text-sm text-gray-600 mb-2">{transcription.date}</div>
                   <div className="text-green-900 whitespace-pre-wrap leading-relaxed">
                     {transcription.text}
                   </div>

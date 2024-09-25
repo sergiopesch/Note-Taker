@@ -24,6 +24,7 @@ export default function Home() {
   const [interimTranscript, setInterimTranscript] = useState('')
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([])
   const finalTranscriptRef = useRef('')
+  const transcriptionContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const storedTranscriptions = localStorage.getItem('transcriptions')
@@ -69,6 +70,13 @@ export default function Home() {
       console.error('Speech recognition not supported in this browser.')
     }
   }, [])
+
+  // Auto-scroll effect
+  useEffect(() => {
+    if (transcriptionContainerRef.current) {
+      transcriptionContainerRef.current.scrollTop = transcriptionContainerRef.current.scrollHeight
+    }
+  }, [transcript, interimTranscript])
 
   const handleStartRecording = () => {
     if (recognition && !isRecording) {
@@ -132,7 +140,7 @@ export default function Home() {
         <Card className="w-full bg-white/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0 mb-8">
           <CardContent className="p-6 sm:p-8 h-full flex flex-col items-center">
             <h1 className="text-4xl font-bold text-gray-800 mb-6 text-center">
-              Voice Notes
+              Note Taker
             </h1>
             <div className="mb-6">
               {isRecording ? (
@@ -147,7 +155,10 @@ export default function Home() {
                 </Button>
               )}
             </div>
-            <div className="w-full bg-gray-100 rounded-2xl p-4 shadow-inner h-32 overflow-y-auto">
+            <div
+              ref={transcriptionContainerRef}
+              className="w-full bg-gray-100 rounded-2xl p-4 shadow-inner h-32 overflow-y-auto"
+            >
               <p className="text-gray-800 whitespace-pre-wrap">
                 {transcript}
                 <span className="opacity-50">{interimTranscript}</span>
