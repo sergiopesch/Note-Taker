@@ -6,6 +6,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Mic, MicOff } from 'lucide-react'
 
+type Transcription = {
+  id: number
+  date: string
+  text: string
+}
+
 const PulsingAnimation = () => (
   <div className="relative w-3 h-3">
     <div className="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-75"></div>
@@ -16,9 +22,18 @@ const PulsingAnimation = () => (
 export default function VoiceNotes() {
   const [isRecording, setIsRecording] = useState(false)
   const [currentTranscript, setCurrentTranscript] = useState('')
+  const [transcriptions, setTranscriptions] = useState<Transcription[]>([])
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const finalTranscriptRef = useRef('')
   const router = useRouter()
+
+  useEffect(() => {
+    // Load existing transcriptions from localStorage
+    const storedTranscriptions = localStorage.getItem('transcriptions')
+    if (storedTranscriptions) {
+      setTranscriptions(JSON.parse(storedTranscriptions))
+    }
+  }, [])
 
   useEffect(() => {
     if (
@@ -57,9 +72,23 @@ export default function VoiceNotes() {
         setCurrentTranscript('')
 
         if (finalTranscriptRef.current.trim() !== '') {
-          localStorage.setItem('transcription', finalTranscriptRef.current.trim())
+          // Save the new transcription with a timestamp
+          const newTranscription: Transcription = {
+            id: Date.now(),
+            date: new Date().toLocaleString(),
+            text: finalTranscriptRef.current.trim(),
+          }
+
+          const updatedTranscriptions = [newTranscription, ...transcriptions]
+          setTranscriptions(updatedTranscriptions)
+          localStorage.setItem(
+            'transcriptions',
+            JSON.stringify(updatedTranscriptions)
+          )
+
           finalTranscriptRef.current = ''
-          router.push('/TranscriptionResult')
+          // Navigate to the detailed view of the new transcription
+          router.push(`/transcriptions/${newTranscription.id}`)
         } else {
           console.log('No transcription captured.')
         }
@@ -71,7 +100,7 @@ export default function VoiceNotes() {
         recognitionRef.current.stop()
       }
     }
-  }, [router])
+  }, [transcriptions, router])
 
   const toggleRecording = () => {
     if (isRecording) {
@@ -85,6 +114,10 @@ export default function VoiceNotes() {
     }
   }
 
+  const handleTranscriptionClick = (id: number) => {
+    router.push(`/transcriptions/${id}`)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4 sm:p-8 font-sans flex items-center justify-center">
       <Card className="w-full max-w-md h-[700px] bg-white/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0">
@@ -92,6 +125,7 @@ export default function VoiceNotes() {
           <h1 className="text-3xl font-semibold text-gray-800 mb-4 text-center">
             Personal Note Taker
           </h1>
+
           <div className="flex-grow flex flex-col space-y-4 overflow-hidden">
             <div className="flex flex-col items-center justify-center">
               <Button
@@ -120,12 +154,35 @@ export default function VoiceNotes() {
             </div>
 
             {isRecording && (
-              <div className="bg-blue-100 rounded-2xl p-4 transition-all duration-300 shadow-md overflow-y-auto max-h-80">
+              <div className="bg-blue-100 rounded-2xl p-4 transition-all duration-300 shadow-md overflow-y-auto max-h-40">
                 <h2 className="text-lg font-semibold text-blue-800 mb-2 text-center">
                   Live Transcript
                 </h2>
                 <div className="text-blue-900 text-center">
                   {currentTranscript || 'Listening...'}
+                </div>
+              </div>
+            )}
+
+            {/* List of Previous Transcriptions */}
+            {transcriptions.length > 0 && (
+              <div className="flex-grow overflow-y-auto">
+                <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                  Previous Transcriptions
+                </h2>
+                <div className="space-y-2">
+                  {transcriptions.map((item) => (
+                    <div
+                      key={item.id}
+                      className="bg-gray-100 rounded-lg p-3 cursor-pointer hover:bg-gray-200"
+                      onClick={() => handleTranscriptionClick(item.id)}
+                    >
+                      <div className="text-sm text-gray-600">{item.date}</div>
+                      <div className="text-gray-800">
+                        {item.text.substring(0, 50)}...
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
