@@ -26,6 +26,7 @@ export default function VoiceNotes() {
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const finalTranscriptRef = useRef('')
   const router = useRouter()
+  const transcriptRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     // Load existing transcriptions from localStorage
@@ -102,6 +103,12 @@ export default function VoiceNotes() {
     }
   }, [transcriptions, router])
 
+  useEffect(() => {
+    if (transcriptRef.current) {
+      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight
+    }
+  }, [currentTranscript])
+
   const toggleRecording = () => {
     if (isRecording) {
       recognitionRef.current?.stop()
@@ -154,7 +161,10 @@ export default function VoiceNotes() {
             </div>
 
             {isRecording && (
-              <div className="bg-blue-100 rounded-2xl p-4 transition-all duration-300 shadow-md overflow-y-auto max-h-40">
+              <div
+                ref={transcriptRef}
+                className="bg-blue-100 rounded-2xl p-4 transition-all duration-300 shadow-md overflow-y-auto max-h-40"
+              >
                 <h2 className="text-lg font-semibold text-blue-800 mb-2 text-center">
                   Live Transcript
                 </h2>
