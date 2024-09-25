@@ -18,26 +18,6 @@ This app lets you record voice notes, transcribe them in real-time, and get hand
 - **Node.js**: Make sure you have Node.js installed (version 14 or above).
 - **OpenAI API Key**: You'll need an API key from OpenAI
 
-### Installation
-
-1. **Clone the repo**
-
-   ```bash
-   git clone https://github.com/sergiopesch/note.git
-   cd voice-notes-web-app
-
-2. **Install Dependencies**
- ```npm install
-
-3. **Set up your API key**
-    '''Create a .env file in the root directory and add: OPENAI_API_KEY=your-openai-api-key
-
-### Run the app
-
-npm run dev
-
-### Open http://localhost:3000 in your browser** 
-
     
 
 
