@@ -1,3 +1,5 @@
+// app/transcriptions/[id]/page.tsx
+
 'use client'
 
 import React, { useState, useEffect } from 'react'
@@ -10,15 +12,16 @@ type Transcription = {
   id: number
   date: string
   text: string
+  title?: string
   summary?: string
   nextSteps?: string
 }
 
 export default function TranscriptionDetail() {
   const [transcription, setTranscription] = useState<Transcription | null>(null)
+  const [title, setTitle] = useState<string>('')
   const [summary, setSummary] = useState<string>('')
   const [nextSteps, setNextSteps] = useState<string>('')
-  const [loading, setLoading] = useState<boolean>(true)
   const router = useRouter()
   const params = useParams()
   const id = params?.id as string
@@ -37,6 +40,9 @@ export default function TranscriptionDetail() {
       )
       if (found) {
         setTranscription(found)
+        setTitle(found.title || '')
+        setSummary(found.summary || '')
+        setNextSteps(found.nextSteps || '')
       } else {
         router.push('/')
       }
@@ -45,72 +51,28 @@ export default function TranscriptionDetail() {
     }
   }, [id, router])
 
-  useEffect(() => {
+  const saveTitle = () => {
     if (transcription) {
-      if (transcription.summary && transcription.nextSteps) {
-        // Summary and next steps already exist
-        setSummary(transcription.summary)
-        setNextSteps(transcription.nextSteps)
-        setLoading(false)
-      } else {
-        const fetchSummary = async () => {
-          try {
-            const response = await fetch('/api/generateSummary', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ transcriptionText: transcription.text }),
-            })
-
-            const data = await response.json()
-
-            if (!response.ok) {
-              throw new Error(data.error || 'Failed to fetch summary.')
+      const storedTranscriptions = localStorage.getItem('transcriptions')
+      if (storedTranscriptions) {
+        const transcriptions: Transcription[] = JSON.parse(storedTranscriptions)
+        const updatedTranscriptions = transcriptions.map((item) => {
+          if (item.id === transcription.id) {
+            return {
+              ...item,
+              title: title,
             }
-
-            setSummary(data.summary)
-            setNextSteps(data.nextSteps)
-
-            // Update the transcription with the new summary and next steps
-            const storedTranscriptions = localStorage.getItem('transcriptions')
-            if (storedTranscriptions) {
-              const transcriptions: Transcription[] = JSON.parse(
-                storedTranscriptions
-              )
-              const updatedTranscriptions = transcriptions.map((item) => {
-                if (item.id === transcription.id) {
-                  return {
-                    ...item,
-                    summary: data.summary,
-                    nextSteps: data.nextSteps,
-                  }
-                }
-                return item
-              })
-              localStorage.setItem(
-                'transcriptions',
-                JSON.stringify(updatedTranscriptions)
-              )
-              setTranscription({
-                ...transcription,
-                summary: data.summary,
-                nextSteps: data.nextSteps,
-              })
-            }
-          } catch (error: any) {
-            console.error('Error fetching summary:', error)
-            setSummary('Unable to generate summary at this time.')
-            setNextSteps('')
-          } finally {
-            setLoading(false)
           }
-        }
-
-        fetchSummary()
+          return item
+        })
+        localStorage.setItem('transcriptions', JSON.stringify(updatedTranscriptions))
+        setTranscription({
+          ...transcription,
+          title: title,
+        })
       }
     }
-  }, [transcription])
+  }
 
   const handleDelete = () => {
     const storedTranscriptions = localStorage.getItem('transcriptions')
@@ -125,69 +87,72 @@ export default function TranscriptionDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4 sm:p-8 font-sans flex items-center justify-center">
-      <Card className="w-full max-w-md h-[700px] bg-white/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0">
-        <CardContent className="p-6 sm:p-8 h-full flex flex-col">
-          {transcription ? (
-            <>
-              <h1 className="text-3xl font-semibold text-gray-800 mb-4 text-center">
-                Transcription Detail
-              </h1>
-              <div className="flex-grow bg-green-100 rounded-2xl p-4 shadow-md overflow-y-auto mb-4">
-                <div className="text-sm text-gray-600 mb-2">
-                  {transcription.date}
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4 sm:p-8 font-sans">
+      <div className="w-full max-w-md mx-auto">
+        <Card className="w-full bg-white/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0">
+          <CardContent className="p-6 sm:p-8 h-full flex flex-col">
+            {transcription ? (
+              <>
+                <div className="mb-4">
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    onBlur={saveTitle}
+                    className="w-full text-3xl font-semibold text-gray-800 text-center bg-transparent border-b-2 border-gray-300 focus:outline-none focus:border-blue-500"
+                    placeholder="Enter title"
+                  />
                 </div>
-                <div className="text-green-900 whitespace-pre-wrap leading-relaxed">
-                  {transcription.text}
+                <div className="flex-grow bg-green-100 rounded-2xl p-4 shadow-md overflow-y-auto mb-4">
+                  <div className="text-sm text-gray-600 mb-2">
+                    {transcription.date}
+                  </div>
+                  <div className="text-green-900 whitespace-pre-wrap leading-relaxed">
+                    {transcription.text}
+                  </div>
                 </div>
-              </div>
 
-              {/* Display Summary and Next Steps */}
-              {loading ? (
-                <div className="text-center text-gray-600">Generating summary...</div>
-              ) : (
-                <>
-                  {summary ? (
-                    <div className="bg-yellow-100 rounded-2xl p-4 shadow-md overflow-y-auto mb-4">
-                      <h2 className="text-xl font-semibold text-yellow-800 mb-2">
-                        Summary
-                      </h2>
-                      <div className="text-yellow-900 whitespace-pre-wrap leading-relaxed">
-                        {summary}
-                      </div>
+                {/* Display Summary and Next Steps */}
+                {summary ? (
+                  <div className="bg-yellow-100 rounded-2xl p-4 shadow-md overflow-y-auto mb-4">
+                    <h2 className="text-xl font-semibold text-yellow-800 mb-2">
+                      Summary
+                    </h2>
+                    <div className="text-yellow-900 whitespace-pre-wrap leading-relaxed">
+                      {summary}
                     </div>
-                  ) : (
-                    <div className="text-center text-gray-600">
-                      Summary is unavailable at the moment.
-                    </div>
-                  )}
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-600">
+                    Summary is unavailable.
+                  </div>
+                )}
 
-                  {nextSteps && (
-                    <div className="bg-purple-100 rounded-2xl p-4 shadow-md overflow-y-auto mb-4">
-                      <h2 className="text-xl font-semibold text-purple-800 mb-2">
-                        Next Steps
-                      </h2>
-                      <div className="text-purple-900 whitespace-pre-wrap leading-relaxed">
-                        {nextSteps}
-                      </div>
+                {nextSteps ? (
+                  <div className="bg-purple-100 rounded-2xl p-4 shadow-md overflow-y-auto mb-4">
+                    <h2 className="text-xl font-semibold text-purple-800 mb-2">
+                      Next Steps
+                    </h2>
+                    <div className="text-purple-900 whitespace-pre-wrap leading-relaxed">
+                      {nextSteps}
                     </div>
-                  )}
-                </>
-              )}
+                  </div>
+                ) : null}
 
-              <div className="mt-4 flex justify-around">
-                <Button variant="destructive" onClick={handleDelete}>
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete Transcription
-                </Button>
-                <Button onClick={() => router.push('/')}>Back to Home</Button>
-              </div>
-            </>
-          ) : (
-            <div>Loading...</div>
-          )}
-        </CardContent>
-      </Card>
+                <div className="mt-4 flex justify-around">
+                  <Button variant="destructive" onClick={handleDelete}>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Transcription
+                  </Button>
+                  <Button onClick={() => router.push('/')}>Back to Home</Button>
+                </div>
+              </>
+            ) : (
+              <div>Loading...</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

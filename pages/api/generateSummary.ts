@@ -1,3 +1,5 @@
+// pages/api/generateSummary.ts
+
 import type { NextApiRequest, NextApiResponse } from 'next'
 import OpenAI from 'openai'
 
@@ -15,7 +17,12 @@ export default async function handler(
     apiKey: process.env.OPENAI_API_KEY,
   })
 
-  const prompt = `Please provide a concise summary and next steps for the following transcription:\n\n"${transcriptionText}"\n\nSummary:\n`
+  const prompt = `Please provide a short and precise title (max 10 words), a concise summary, and next steps for the following transcription:
+
+"${transcriptionText}"
+
+Title:
+`
 
   const maxRetries = 5
   let retryCount = 0
@@ -24,16 +31,18 @@ export default async function handler(
   while (retryCount < maxRetries) {
     try {
       const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'gpt-3.5-turbo',
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 200,
+        max_tokens: 250,
         temperature: 0.7,
       })
 
       const result = response.choices[0].message?.content || ''
-      const [summaryText, nextStepsText] = result.split('Next Steps:')
+      const [titleText, rest] = result.split('Summary:')
+      const [summaryText, nextStepsText] = rest.split('Next Steps:')
 
       return res.status(200).json({
+        title: titleText.trim(),
         summary: summaryText.trim(),
         nextSteps: nextStepsText ? nextStepsText.trim() : '',
       })
