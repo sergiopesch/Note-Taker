@@ -6,6 +6,7 @@ import React from 'react'
 import { useRouter } from 'next/navigation'
 import { Calendar } from 'lucide-react'
 
+// Define the Transcription type
 type Transcription = {
   id: number
   date: string
@@ -15,6 +16,7 @@ type Transcription = {
   nextSteps?: string
 }
 
+// Define the props for the component
 interface VoiceNotesProps {
   transcriptions: Transcription[]
 }
@@ -22,6 +24,7 @@ interface VoiceNotesProps {
 export default function VoiceNotes({ transcriptions }: VoiceNotesProps) {
   const router = useRouter()
 
+  // Handle click on a transcription card
   const handleClick = (id: number) => {
     router.push(`/transcriptions/${id}`)
   }
@@ -29,7 +32,9 @@ export default function VoiceNotes({ transcriptions }: VoiceNotesProps) {
   return (
     <div className="w-full">
       {transcriptions.length === 0 ? (
-        <div className="text-center text-gray-600">No transcriptions yet.</div>
+        <div className="text-center text-gray-600">
+          No transcriptions yet.
+        </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {transcriptions.map((item) => (

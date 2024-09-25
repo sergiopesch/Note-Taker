@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Trash2 } from 'lucide-react'
 
+// Define the Transcription type
 type Transcription = {
   id: number
   date: string
@@ -26,6 +27,7 @@ export default function TranscriptionDetail() {
   const params = useParams()
   const id = params?.id as string
 
+  // Load the transcription data
   useEffect(() => {
     if (!id) {
       router.push('/')
@@ -51,6 +53,7 @@ export default function TranscriptionDetail() {
     }
   }, [id, router])
 
+  // Save the updated title
   const saveTitle = () => {
     if (transcription) {
       const storedTranscriptions = localStorage.getItem('transcriptions')
@@ -74,6 +77,7 @@ export default function TranscriptionDetail() {
     }
   }
 
+  // Delete the transcription
   const handleDelete = () => {
     const storedTranscriptions = localStorage.getItem('transcriptions')
     if (storedTranscriptions) {
@@ -87,30 +91,34 @@ export default function TranscriptionDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4 sm:p-8 font-sans flex items-center justify-center">
+    <div className="min-h-screen p-4 sm:p-8 font-sans flex items-center justify-center bg-gradient-to-b from-gray-50 to-white">
       <div className="w-full max-w-3xl">
         <Card className="w-full bg-white/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0">
           <CardContent className="p-6 sm:p-8 h-full flex flex-col">
             {transcription ? (
               <>
+                {/* Editable Title */}
                 <div className="mb-4">
                   <input
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     onBlur={saveTitle}
-                    className="w-full text-3xl font-semibold text-gray-800 text-center bg-transparent border-b-2 border-gray-300 focus:outline-none focus:border-blue-500"
+                    className="w-full text-3xl font-semibold text-center bg-transparent border-b-2 border-gray-300 focus:outline-none focus:border-blue-500"
                     placeholder="Enter title"
                   />
                 </div>
+                {/* Transcription Text */}
                 <div className="flex-grow bg-green-100 rounded-2xl p-4 shadow-md overflow-y-auto mb-4">
-                  <div className="text-sm text-gray-600 mb-2">{transcription.date}</div>
+                  <div className="text-sm text-gray-600 mb-2">
+                    {transcription.date}
+                  </div>
                   <div className="text-green-900 whitespace-pre-wrap leading-relaxed">
                     {transcription.text}
                   </div>
                 </div>
 
-                {/* Display Summary and Next Steps */}
+                {/* Summary */}
                 {summary ? (
                   <div className="bg-yellow-100 rounded-2xl p-4 shadow-md overflow-y-auto mb-4">
                     <h2 className="text-xl font-semibold text-yellow-800 mb-2">
@@ -126,6 +134,7 @@ export default function TranscriptionDetail() {
                   </div>
                 )}
 
+                {/* Next Steps */}
                 {nextSteps ? (
                   <div className="bg-purple-100 rounded-2xl p-4 shadow-md overflow-y-auto mb-4">
                     <h2 className="text-xl font-semibold text-purple-800 mb-2">
@@ -137,6 +146,7 @@ export default function TranscriptionDetail() {
                   </div>
                 ) : null}
 
+                {/* Action Buttons */}
                 <div className="mt-4 flex justify-around">
                   <Button variant="destructive" onClick={handleDelete}>
                     <Trash2 className="w-4 h-4 mr-2" />

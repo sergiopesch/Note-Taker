@@ -3,7 +3,7 @@
 import '@/app/globals.css';
 
 export const metadata = {
-  title: 'Note Taker App',
+  title: 'Note Taker',
   description: 'An app to help you take notes of your ideas',
 };
 
