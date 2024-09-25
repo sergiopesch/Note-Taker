@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Mic, MicOff, Trash2 } from 'lucide-react'
+import { Mic, MicOff } from 'lucide-react'
 
 const PulsingAnimation = () => (
   <div className="relative w-3 h-3">
@@ -15,10 +16,9 @@ const PulsingAnimation = () => (
 export default function VoiceNotes() {
   const [isRecording, setIsRecording] = useState(false)
   const [currentTranscript, setCurrentTranscript] = useState('')
-  const [fullTranscript, setFullTranscript] = useState('')
-  const [showFullTranscript, setShowFullTranscript] = useState(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
-  const finalTranscriptRef = useRef('') // To accumulate final transcripts
+  const finalTranscriptRef = useRef('')
+  const router = useRouter()
 
   useEffect(() => {
     if (
@@ -34,7 +34,6 @@ export default function VoiceNotes() {
       recognitionRef.current.onresult = (event) => {
         let interimTranscript = ''
 
-        // Process results starting from event.resultIndex
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i]
           const transcript = result[0].transcript
@@ -45,19 +44,25 @@ export default function VoiceNotes() {
           }
         }
 
-        // Update currentTranscript with last 500 characters
         const combinedTranscript = finalTranscriptRef.current + interimTranscript
         setCurrentTranscript(combinedTranscript.slice(-500))
       }
 
+      recognitionRef.current.onerror = (event) => {
+        console.error('Speech recognition error detected: ' + event.error)
+      }
+
       recognitionRef.current.onend = () => {
-        if (finalTranscriptRef.current.trim() !== '') {
-          setFullTranscript(finalTranscriptRef.current)
-          finalTranscriptRef.current = '' // Reset the ref
-          setShowFullTranscript(true)
-        }
+        setIsRecording(false)
         setCurrentTranscript('')
-        setIsRecording(false) // Ensure recording state is updated
+
+        if (finalTranscriptRef.current.trim() !== '') {
+          localStorage.setItem('transcription', finalTranscriptRef.current.trim())
+          finalTranscriptRef.current = ''
+          router.push('/TranscriptionResult')
+        } else {
+          console.log('No transcription captured.')
+        }
       }
     }
 
@@ -66,20 +71,18 @@ export default function VoiceNotes() {
         recognitionRef.current.stop()
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Run once on mount
+  }, [router])
 
   const toggleRecording = () => {
     if (isRecording) {
       recognitionRef.current?.stop()
+      // Do not set isRecording to false here; let onend handle it
     } else {
-      finalTranscriptRef.current = '' // Reset the ref when starting
-      setFullTranscript('')
+      finalTranscriptRef.current = ''
       setCurrentTranscript('')
-      setShowFullTranscript(false)
       recognitionRef.current?.start()
+      setIsRecording(true)
     }
-    setIsRecording(!isRecording)
   }
 
   return (
@@ -117,23 +120,12 @@ export default function VoiceNotes() {
             </div>
 
             {isRecording && (
-              <div className="bg-blue-100 rounded-2xl p-4 transition-all duration-300 shadow-md overflow-y-auto max-h-40">
+              <div className="bg-blue-100 rounded-2xl p-4 transition-all duration-300 shadow-md overflow-y-auto max-h-80">
                 <h2 className="text-lg font-semibold text-blue-800 mb-2 text-center">
                   Live Transcript
                 </h2>
                 <div className="text-blue-900 text-center">
                   {currentTranscript || 'Listening...'}
-                </div>
-              </div>
-            )}
-
-            {showFullTranscript && !isRecording && (
-              <div className="bg-green-100 rounded-2xl p-4 transition-all duration-300 shadow-md overflow-y-auto flex-grow">
-                <h2 className="text-lg font-semibold text-green-800 mb-2 text-center">
-                  Full Transcript
-                </h2>
-                <div className="text-green-900 whitespace-pre-wrap">
-                  {fullTranscript}
                 </div>
               </div>
             )}
