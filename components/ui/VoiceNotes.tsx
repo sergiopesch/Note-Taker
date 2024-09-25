@@ -10,6 +10,8 @@ type Transcription = {
   id: number
   date: string
   text: string
+  summary?: string
+  nextSteps?: string
 }
 
 const PulsingAnimation = () => (

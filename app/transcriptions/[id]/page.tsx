@@ -10,6 +10,8 @@ type Transcription = {
   id: number
   date: string
   text: string
+  summary?: string
+  nextSteps?: string
 }
 
 export default function TranscriptionDetail() {
@@ -44,37 +46,71 @@ export default function TranscriptionDetail() {
   }, [id, router])
 
   useEffect(() => {
-  if (transcription) {
-    const fetchSummary = async () => {
-      try {
-        const response = await fetch('/api/generateSummary', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ transcriptionText: transcription.text }),
-        })
+    if (transcription) {
+      if (transcription.summary && transcription.nextSteps) {
+        // Summary and next steps already exist
+        setSummary(transcription.summary)
+        setNextSteps(transcription.nextSteps)
+        setLoading(false)
+      } else {
+        const fetchSummary = async () => {
+          try {
+            const response = await fetch('/api/generateSummary', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ transcriptionText: transcription.text }),
+            })
 
-        const data = await response.json()
+            const data = await response.json()
 
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to fetch summary.')
+            if (!response.ok) {
+              throw new Error(data.error || 'Failed to fetch summary.')
+            }
+
+            setSummary(data.summary)
+            setNextSteps(data.nextSteps)
+
+            // Update the transcription with the new summary and next steps
+            const storedTranscriptions = localStorage.getItem('transcriptions')
+            if (storedTranscriptions) {
+              const transcriptions: Transcription[] = JSON.parse(
+                storedTranscriptions
+              )
+              const updatedTranscriptions = transcriptions.map((item) => {
+                if (item.id === transcription.id) {
+                  return {
+                    ...item,
+                    summary: data.summary,
+                    nextSteps: data.nextSteps,
+                  }
+                }
+                return item
+              })
+              localStorage.setItem(
+                'transcriptions',
+                JSON.stringify(updatedTranscriptions)
+              )
+              setTranscription({
+                ...transcription,
+                summary: data.summary,
+                nextSteps: data.nextSteps,
+              })
+            }
+          } catch (error: any) {
+            console.error('Error fetching summary:', error)
+            setSummary('Unable to generate summary at this time.')
+            setNextSteps('')
+          } finally {
+            setLoading(false)
+          }
         }
 
-        setSummary(data.summary)
-        setNextSteps(data.nextSteps)
-      } catch (error: any) {
-        console.error('Error fetching summary:', error)
-        setSummary('Unable to generate summary at this time.')
-        setNextSteps('')
-      } finally {
-        setLoading(false)
+        fetchSummary()
       }
     }
-
-    fetchSummary()
-  }
-}, [transcription])
+  }, [transcription])
 
   const handleDelete = () => {
     const storedTranscriptions = localStorage.getItem('transcriptions')
@@ -83,10 +119,7 @@ export default function TranscriptionDetail() {
       const updatedTranscriptions = transcriptions.filter(
         (item: Transcription) => item.id !== Number(id)
       )
-      localStorage.setItem(
-        'transcriptions',
-        JSON.stringify(updatedTranscriptions)
-      )
+      localStorage.setItem('transcriptions', JSON.stringify(updatedTranscriptions))
     }
     router.push('/')
   }
@@ -114,7 +147,7 @@ export default function TranscriptionDetail() {
                 <div className="text-center text-gray-600">Generating summary...</div>
               ) : (
                 <>
-                  {summary && (
+                  {summary ? (
                     <div className="bg-yellow-100 rounded-2xl p-4 shadow-md overflow-y-auto mb-4">
                       <h2 className="text-xl font-semibold text-yellow-800 mb-2">
                         Summary
@@ -122,6 +155,10 @@ export default function TranscriptionDetail() {
                       <div className="text-yellow-900 whitespace-pre-wrap leading-relaxed">
                         {summary}
                       </div>
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-600">
+                      Summary is unavailable at the moment.
                     </div>
                   )}
 
