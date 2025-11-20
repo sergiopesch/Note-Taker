@@ -64,6 +64,7 @@ export default function Home() {
       const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : null
       
       if (!apiKey || apiKey === '') {
+        alert('Whoops! 🙊 It looks like you forgot your OpenAI API key. Even AI needs a little magic to work! Please add it in settings to start.')
         throw new Error('Please configure your OpenAI API key in Settings first')
       }
 
