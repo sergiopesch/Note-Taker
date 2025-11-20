@@ -22,6 +22,7 @@ export default function Home() {
   // State variables
   const [isSessionActive, setIsSessionActive] = useState(false)
   const [transcript, setTranscript] = useState('')
+  const [currentTranscript, setCurrentTranscript] = useState('')
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([])
   const [status, setStatus] = useState('')
 
@@ -30,6 +31,7 @@ export default function Home() {
   const dataChannel = useRef<RTCDataChannel | null>(null)
   const audioStream = useRef<MediaStream | null>(null)
   const transcriptionContainerRef = useRef<HTMLDivElement>(null)
+  const currentTranscriptRef = useRef('')
 
   // Load existing transcriptions from localStorage
   useEffect(() => {
@@ -45,33 +47,62 @@ export default function Home() {
       transcriptionContainerRef.current.scrollTop =
         transcriptionContainerRef.current.scrollHeight
     }
-  }, [transcript])
+  }, [transcript, currentTranscript])
 
   const startSession = async () => {
     try {
+      // Clear previous transcript when starting a new session
+      setTranscript('')
+      setCurrentTranscript('')
+      currentTranscriptRef.current = ''
       setStatus('Requesting microphone...')
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       audioStream.current = stream
 
       setStatus('Fetching token...')
-      const apiKey = localStorage.getItem('openai_api_key') || undefined
+      const rawApiKey = localStorage.getItem('openai_api_key')
+      const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : null
+      
+      if (!apiKey || apiKey === '') {
+        throw new Error('Please configure your OpenAI API key in Settings first')
+      }
+
+      if (!apiKey.startsWith('sk-')) {
+        throw new Error('Invalid API key format. OpenAI API keys should start with "sk-"')
+      }
+
       const tokenResponse = await getEphemeralToken(apiKey)
 
       if (tokenResponse.error || !tokenResponse.client_secret) {
-        throw new Error(tokenResponse.error || 'Failed to get token')
+        const errorMsg = tokenResponse.error || 'Failed to get ephemeral token. Please check your API key.'
+        console.error('Ephemeral token error:', tokenResponse)
+        throw new Error(errorMsg)
       }
 
       const ephemeralKey = tokenResponse.client_secret
+      
+      if (!ephemeralKey || typeof ephemeralKey !== 'string' || ephemeralKey.trim() === '') {
+        throw new Error('Received empty or invalid ephemeral token. Please try again.')
+      }
 
       setStatus('Connecting...')
       const pc = new RTCPeerConnection()
       peerConnection.current = pc
 
-      // Set up remote audio (if the model speaks back)
-      const audioEl = document.createElement('audio')
-      audioEl.autoplay = true
-      pc.ontrack = (e) => {
-        audioEl.srcObject = e.streams[0]
+      // Handle ICE candidates
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          // ICE candidates are handled automatically by the SDP exchange
+          // No need to send them separately for OpenAI Realtime API
+        }
+      }
+
+      // Handle connection state changes
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          console.error('Connection state:', pc.connectionState)
+          setStatus(`Connection ${pc.connectionState}`)
+        }
       }
 
       // Add local audio track
@@ -81,26 +112,133 @@ export default function Home() {
       const dc = pc.createDataChannel('oai-events')
       dataChannel.current = dc
 
+      let hasActiveResponse = false
+      let preferInputTranscription = false
+
+      const appendLiveText = (delta: string) => {
+        if (!delta) return
+        setCurrentTranscript((prev) => {
+          const updated = prev + delta
+          currentTranscriptRef.current = updated
+          return updated
+        })
+      }
+
+      const commitTranscript = (text?: string) => {
+        const addition = (text ?? currentTranscriptRef.current).trim()
+        setCurrentTranscript('')
+        currentTranscriptRef.current = ''
+        if (!addition) {
+          return
+        }
+        setTranscript((prev) => {
+          const prevText = prev || ''
+          return prevText ? `${prevText} ${addition}` : addition
+        })
+      }
+
+      const createTranscriptionResponse = () => {
+        if (dc.readyState !== 'open' || hasActiveResponse) return
+        hasActiveResponse = true
+        const responseCreate = {
+          type: 'response.create',
+          response: {
+            modalities: ['text'],
+            instructions:
+              'Transcribe everything the user says verbatim. Do not add commentary or acknowledgements. Output only the words you hear.',
+          },
+        }
+        dc.send(JSON.stringify(responseCreate))
+      }
+
       dc.addEventListener('open', () => {
         setIsSessionActive(true)
         setStatus('Listening...')
-        setTranscript('') // Clear previous transcript
+        setTranscript('')
+        setCurrentTranscript('')
+        currentTranscriptRef.current = ''
 
         // Configure the session
-        const event = {
+        const sessionUpdate = {
           type: 'session.update',
           session: {
-            modalities: ['text', 'audio'],
+            modalities: ['text'],
+            instructions: 'You are a silent note-taker. You listen to the user and allow them to speak. You do not interrupt or respond.',
+            input_audio_transcription: {
+              model: 'whisper-1',
+            },
           },
         }
-        dc.send(JSON.stringify(event))
+        dc.send(JSON.stringify(sessionUpdate))
+        createTranscriptionResponse()
       })
 
       dc.addEventListener('message', (e) => {
-        const realtimeEvent = JSON.parse(e.data)
+        try {
+          if (!e || !e.data) return
 
-        if (realtimeEvent.type === 'response.audio_transcript.delta') {
-          setTranscript((prev) => prev + realtimeEvent.delta)
+          const realtimeEvent = JSON.parse(e.data)
+          if (!realtimeEvent || typeof realtimeEvent !== 'object') return
+
+          switch (realtimeEvent.type) {
+            case 'input_audio_buffer.transcript.delta': {
+              preferInputTranscription = true
+              const delta = typeof realtimeEvent.delta === 'string' ? realtimeEvent.delta : ''
+              appendLiveText(delta)
+              break
+            }
+            case 'conversation.item.input_audio_transcription.completed': {
+              preferInputTranscription = true
+              const finalTranscript =
+                typeof realtimeEvent.transcript === 'string' ? realtimeEvent.transcript : ''
+              if (finalTranscript) {
+                commitTranscript(finalTranscript)
+              }
+              hasActiveResponse = false
+              setTimeout(createTranscriptionResponse, 50)
+              break
+            }
+            case 'response.output_text.delta': {
+              if (preferInputTranscription) break
+              const delta =
+                typeof realtimeEvent.delta === 'string'
+                  ? realtimeEvent.delta
+                  : typeof realtimeEvent.text === 'string'
+                    ? realtimeEvent.text
+                    : ''
+              appendLiveText(delta)
+              break
+            }
+            case 'response.created':
+            case 'response.started': {
+              hasActiveResponse = true
+              break
+            }
+            case 'response.done':
+            case 'response.completed': {
+              if (!preferInputTranscription) {
+                commitTranscript()
+              }
+              hasActiveResponse = false
+              setTimeout(createTranscriptionResponse, 50)
+              break
+            }
+            case 'response.error': {
+              console.error('Realtime response error:', realtimeEvent)
+              hasActiveResponse = false
+              setTimeout(createTranscriptionResponse, 200)
+              break
+            }
+            default: {
+              // no-op
+            }
+          }
+
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Realtime event:', realtimeEvent.type, realtimeEvent)
+          }
+        } catch (error) {
+          console.error('Error parsing realtime event:', error, e?.data)
         }
       })
 
@@ -118,6 +256,11 @@ export default function Home() {
           'Content-Type': 'application/sdp',
         },
       })
+
+      if (!sdpResponse.ok) {
+        const errorText = await sdpResponse.text()
+        throw new Error(`Failed to establish connection: ${sdpResponse.status} ${errorText}`)
+      }
 
       const answer: RTCSessionDescriptionInit = {
         type: 'answer',
@@ -150,8 +293,9 @@ export default function Home() {
     }
 
     // If we have a transcript, generate a summary
-    if (transcript.trim()) {
-      await processTranscription(transcript)
+    const fullTranscript = (transcript + ' ' + currentTranscript).trim()
+    if (fullTranscript) {
+      await processTranscription(fullTranscript)
     }
   }
 
@@ -164,8 +308,10 @@ export default function Home() {
       text: finalText,
     }
 
+    let summarySucceeded = false
     try {
-      const apiKey = localStorage.getItem('openai_api_key') || undefined
+      const rawApiKey = localStorage.getItem('openai_api_key')
+      const apiKey = typeof rawApiKey === 'string' && rawApiKey.trim() ? rawApiKey.trim() : undefined
       const result = await generateSummaryAction({
         transcriptionText: finalText,
         apiKey,
@@ -178,16 +324,20 @@ export default function Home() {
       newTranscription.title = result.title
       newTranscription.summary = result.summary
       newTranscription.nextSteps = result.nextSteps
+      summarySucceeded = true
     } catch (error) {
       console.error('Error generating summary:', error)
-      setStatus('Error generating summary')
+      const message = error instanceof Error ? error.message : 'Error generating summary'
+      setStatus(message)
     }
 
     // Save the new transcription and update state
     const updatedTranscriptions = [newTranscription, ...transcriptions]
     localStorage.setItem('transcriptions', JSON.stringify(updatedTranscriptions))
     setTranscriptions(updatedTranscriptions)
-    setStatus('')
+    if (summarySucceeded) {
+      setStatus('')
+    }
   }
 
   return (
@@ -221,7 +371,7 @@ export default function Home() {
               className="w-full bg-gray-100 rounded-2xl p-4 shadow-inner h-32 overflow-y-auto"
             >
               <p className="text-gray-800 whitespace-pre-wrap">
-                {transcript}
+                {transcript}{currentTranscript}
               </p>
             </div>
           </CardContent>

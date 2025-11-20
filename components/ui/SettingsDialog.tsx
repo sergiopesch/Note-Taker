@@ -25,8 +25,9 @@ export function SettingsDialog() {
     }, [])
 
     const handleSave = () => {
-        if (apiKey) {
-            localStorage.setItem('openai_api_key', apiKey)
+        const trimmedKey = apiKey?.trim()
+        if (trimmedKey) {
+            localStorage.setItem('openai_api_key', trimmedKey)
         } else {
             localStorage.removeItem('openai_api_key')
         }
