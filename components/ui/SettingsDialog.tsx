@@ -99,29 +99,27 @@ export function SettingsDialog({ onSettingsChange }: SettingsDialogProps) {
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="">
-                    <Settings className="h-5 w-5" />
+                <Button variant="ghost" size="icon">
+                    <Settings className="h-4 w-4" />
                     <span className="sr-only">Settings</span>
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[480px]">
+            <DialogContent className="sm:max-w-[440px]">
                 <DialogHeader>
                     <DialogTitle>Settings</DialogTitle>
                     <DialogDescription>
                         Configure your AI provider, API key, and audio source. Keys are stored locally in your browser.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-5 py-4">
+                <div className="space-y-5 py-4">
                     {/* AI Provider */}
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="provider" className="text-right">
-                            AI Provider
-                        </Label>
+                    <div className="space-y-2">
+                        <Label htmlFor="provider">AI Provider</Label>
                         <select
                             id="provider"
                             value={provider}
                             onChange={(e) => setProvider(e.target.value as AIProvider)}
-                            className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="openai">OpenAI</option>
                             <option value="claude">Claude (Anthropic)</option>
@@ -129,11 +127,9 @@ export function SettingsDialog({ onSettingsChange }: SettingsDialogProps) {
                         </select>
                     </div>
 
-                    {/* API Key for selected provider */}
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="api-key" className="text-right">
-                            {PROVIDER_LABELS[provider]} Key
-                        </Label>
+                    {/* API Key */}
+                    <div className="space-y-2">
+                        <Label htmlFor="api-key">{PROVIDER_LABELS[provider]} Key</Label>
                         <Input
                             id="api-key"
                             type="password"
@@ -141,39 +137,40 @@ export function SettingsDialog({ onSettingsChange }: SettingsDialogProps) {
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                                 setApiKeys((prev) => ({ ...prev, [provider]: e.target.value }))
                             }
-                            className="col-span-3"
                             placeholder={PROVIDER_PLACEHOLDERS[provider]}
                         />
                     </div>
 
                     {/* Audio Source */}
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="audio-source" className="text-right">
-                            Audio Source
-                        </Label>
+                    <div className="space-y-2">
+                        <Label htmlFor="audio-source">Audio Source</Label>
                         <select
                             id="audio-source"
                             value={audioSource}
                             onChange={(e) => setAudioSource(e.target.value as AudioSource)}
-                            className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="mic">Microphone Only</option>
                             <option value="system">System Audio Only (screen share)</option>
                             <option value="both">Microphone + System Audio</option>
                         </select>
+                        {audioSource !== 'mic' && (
+                            <p className="text-xs text-muted-foreground">
+                                System audio requires screen/tab sharing. Check &quot;Share audio&quot; in the browser dialog.
+                            </p>
+                        )}
                     </div>
-
-                    {audioSource !== 'mic' && (
-                        <p className="text-xs text-muted-foreground col-span-4 text-center">
-                            System audio requires screen/tab sharing. Check &quot;Share audio&quot; in the browser dialog.
-                        </p>
-                    )}
                 </div>
-                <DialogFooter>
-                    <Button variant="destructive" onClick={handleRemoveKey} className="mr-auto">
-                        Remove {PROVIDER_LABELS[provider]} Key
+                <DialogFooter className="flex-row gap-2 sm:justify-between">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveKey}
+                        className="text-muted-foreground hover:text-foreground"
+                    >
+                        Remove Key
                     </Button>
-                    <Button onClick={handleSave}>Save changes</Button>
+                    <Button onClick={handleSave}>Save</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
