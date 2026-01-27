@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Mic, StopCircle } from 'lucide-react'
 import VoiceNotes from '@/components/ui/VoiceNotes'
 import { SettingsDialog } from '@/components/ui/SettingsDialog'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import type { AIProvider, AudioSource } from '@/components/ui/SettingsDialog'
 import { generateSummaryAction } from '@/app/actions'
 
@@ -399,18 +400,21 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-8 font-sans flex flex-col items-center justify-center bg-gradient-to-b from-blue-100 to-white relative">
-      <SettingsDialog onSettingsChange={loadSettings} />
+    <div className="min-h-screen p-4 sm:p-8 font-sans flex flex-col items-center justify-center bg-gradient-to-b from-blue-100 to-white dark:from-gray-950 dark:to-gray-900 relative theme-transition">
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        <ThemeToggle />
+        <SettingsDialog onSettingsChange={loadSettings} />
+      </div>
       <div className="w-full max-w-3xl">
-        <Card className="w-full bg-white/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0 mb-8">
+        <Card className="w-full bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0 dark:border-gray-700 mb-8 theme-transition">
           <CardContent className="p-6 sm:p-8 h-full flex flex-col items-center">
-            <h1 className="text-4xl font-bold mb-6 text-center text-gray-800">
+            <h1 className="text-4xl font-bold mb-6 text-center text-gray-800 dark:text-gray-100">
               Note Taker
             </h1>
 
-            {status && <p className="text-sm text-gray-500 mb-4">{status}</p>}
+            {status && <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{status}</p>}
 
-            <div className="mb-2 text-xs text-gray-400">
+            <div className="mb-2 text-xs text-gray-400 dark:text-gray-500">
               {SOURCE_LABELS[audioSource]} &middot;{' '}
               {PROVIDER_LABELS[provider]}
             </div>
@@ -432,9 +436,9 @@ export default function Home() {
             {/* Transcription Display */}
             <div
               ref={transcriptionContainerRef}
-              className="w-full bg-gray-100 rounded-2xl p-4 shadow-inner h-32 overflow-y-auto"
+              className="w-full bg-gray-100 dark:bg-gray-700/50 rounded-2xl p-4 shadow-inner h-32 overflow-y-auto theme-transition"
             >
-              <p className="text-gray-800 whitespace-pre-wrap">
+              <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
                 {liveTranscript ||
                   (isRecording
                     ? 'Listening...'

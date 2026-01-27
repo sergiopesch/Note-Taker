@@ -32,7 +32,7 @@ export default function VoiceNotes({ transcriptions }: VoiceNotesProps) {
   return (
     <div className="w-full">
       {transcriptions.length === 0 ? (
-        <div className="text-center text-gray-600">
+        <div className="text-center text-gray-600 dark:text-gray-400">
           No transcriptions yet.
         </div>
       ) : (
@@ -40,23 +40,23 @@ export default function VoiceNotes({ transcriptions }: VoiceNotesProps) {
           {transcriptions.map((item) => (
             <div
               key={item.id}
-              className="p-4 bg-white shadow rounded-lg cursor-pointer hover:shadow-md transition-shadow"
+              className="p-4 bg-white dark:bg-gray-800 shadow rounded-lg cursor-pointer hover:shadow-md dark:hover:shadow-gray-700/50 transition-shadow theme-transition"
               onClick={() => handleClick(item.id)}
             >
               <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center text-sm text-gray-500">
+                <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
                   <Calendar className="w-4 h-4 mr-1" />
                   {item.date}
                 </div>
               </div>
-              <div className="text-xl font-semibold text-gray-800 mb-1">
+              <div className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-1">
                 {item.title
                   ? item.title.length > 60
                     ? item.title.substring(0, 60) + '...'
                     : item.title
                   : 'Untitled'}
               </div>
-              <div className="text-gray-600">
+              <div className="text-gray-600 dark:text-gray-400">
                 {item.summary
                   ? item.summary.length > 80
                     ? item.summary.substring(0, 80) + '...'
