@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Mic, StopCircle } from 'lucide-react'
 import VoiceNotes from '@/components/ui/VoiceNotes'
 import { SettingsDialog } from '@/components/ui/SettingsDialog'
@@ -106,8 +105,6 @@ export default function Home() {
           'No system audio captured. Make sure to check "Share audio" in the browser dialog.'
         )
       }
-      // We keep the video track alive (some browsers stop audio if video is stopped)
-      // but we only use audio tracks for recording
       return new MediaStream(audioTracks)
     }
 
@@ -123,17 +120,14 @@ export default function Home() {
       })
       streamsRef.current.push(displayStream)
     } catch {
-      // User cancelled screen share — fall back to mic only
       return micStream
     }
 
     const displayAudioTracks = displayStream.getAudioTracks()
     if (displayAudioTracks.length === 0) {
-      // No system audio available, fall back to mic only
       return micStream
     }
 
-    // Merge the two audio streams via AudioContext
     const audioContext = new AudioContext()
     audioContextRef.current = audioContext
     const destination = audioContext.createMediaStreamDestination()
@@ -172,19 +166,17 @@ export default function Home() {
       }
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        // 'no-speech' and 'aborted' are expected during normal usage
         if (event.error !== 'no-speech' && event.error !== 'aborted') {
           console.warn('SpeechRecognition error:', event.error)
         }
       }
 
       recognition.onend = () => {
-        // Restart if still recording
         if (mediaRecorderRef.current?.state === 'recording') {
           try {
             recognition.start()
           } catch {
-            // ignore — may already be started
+            // ignore
           }
         }
       }
@@ -239,12 +231,11 @@ export default function Home() {
     try {
       setLiveTranscript('')
       audioChunksRef.current = []
-      loadSettings() // re-read in case user changed settings
+      loadSettings()
 
       setStatus('Setting up audio...')
       const stream = await getAudioStream()
 
-      // Choose a supported mime type
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/webm')
@@ -263,9 +254,7 @@ export default function Home() {
         }
       }
 
-      recorder.start(1000) // collect chunks every second
-
-      // Start browser SpeechRecognition for live preview
+      recorder.start(1000)
       startSpeechRecognition()
 
       setIsRecording(true)
@@ -280,7 +269,6 @@ export default function Home() {
   const stopRecording = async () => {
     setIsRecording(false)
 
-    // Stop speech recognition
     if (speechRecognitionRef.current) {
       try {
         speechRecognitionRef.current.stop()
@@ -290,7 +278,6 @@ export default function Home() {
       speechRecognitionRef.current = null
     }
 
-    // Stop and collect MediaRecorder data
     const recorder = mediaRecorderRef.current
     if (!recorder || recorder.state === 'inactive') {
       cleanup()
@@ -307,7 +294,6 @@ export default function Home() {
       recorder.stop()
     })
 
-    // Cleanup all streams
     streamsRef.current.forEach((s) => s.getTracks().forEach((t) => t.stop()))
     streamsRef.current = []
     if (audioContextRef.current) {
@@ -325,7 +311,6 @@ export default function Home() {
       return
     }
 
-    // Re-read settings
     const currentProvider =
       (localStorage.getItem('ai_provider') as AIProvider) || 'openai'
     const apiKey = localStorage.getItem(STORAGE_KEYS[currentProvider])
@@ -337,7 +322,6 @@ export default function Home() {
       return
     }
 
-    // --- Transcribe ---
     setStatus(`Transcribing with ${PROVIDER_LABELS[currentProvider]}...`)
 
     try {
@@ -363,7 +347,6 @@ export default function Home() {
         return
       }
 
-      // --- Summarize ---
       setStatus('Generating summary...')
       const summaryResult = await generateSummaryAction({
         transcriptionText: transcribedText,
@@ -400,55 +383,62 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-8 font-sans flex flex-col items-center justify-center bg-gradient-to-b from-blue-100 to-white dark:from-gray-950 dark:to-gray-900 relative theme-transition">
+    <div className="min-h-screen p-4 sm:p-8 font-sans flex flex-col items-center justify-center bg-background relative">
       <div className="absolute top-4 right-4 flex items-center gap-2">
         <ThemeToggle />
         <SettingsDialog onSettingsChange={loadSettings} />
       </div>
-      <div className="w-full max-w-3xl">
-        <Card className="w-full bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm shadow-lg rounded-3xl overflow-hidden border-0 dark:border-gray-700 mb-8 theme-transition">
-          <CardContent className="p-6 sm:p-8 h-full flex flex-col items-center">
-            <h1 className="text-4xl font-bold mb-6 text-center text-gray-800 dark:text-gray-100">
-              Note Taker
-            </h1>
+      <div className="w-full max-w-2xl">
+        <div className="flex flex-col items-center mb-12">
+          <h1 className="text-4xl font-bold tracking-tight mb-1">
+            Note Taker
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {SOURCE_LABELS[audioSource]} &middot; {PROVIDER_LABELS[provider]}
+          </p>
+        </div>
 
-            {status && <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{status}</p>}
+        <div className="flex flex-col items-center mb-10">
+          {status && (
+            <p className="text-sm text-muted-foreground mb-4">{status}</p>
+          )}
 
-            <div className="mb-2 text-xs text-gray-400 dark:text-gray-500">
-              {SOURCE_LABELS[audioSource]} &middot;{' '}
-              {PROVIDER_LABELS[provider]}
-            </div>
+          <div className="mb-6">
+            {isRecording ? (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={stopRecording}
+                className="rounded-full px-8"
+              >
+                <StopCircle className="w-5 h-5 mr-2" />
+                Stop Recording
+              </Button>
+            ) : (
+              <Button
+                size="lg"
+                onClick={startRecording}
+                className="rounded-full px-8"
+              >
+                <Mic className="w-5 h-5 mr-2" />
+                Start Recording
+              </Button>
+            )}
+          </div>
 
-            <div className="mb-6">
-              {isRecording ? (
-                <Button variant="destructive" onClick={stopRecording}>
-                  <StopCircle className="w-6 h-6 mr-2" />
-                  Stop Recording
-                </Button>
-              ) : (
-                <Button onClick={startRecording}>
-                  <Mic className="w-6 h-6 mr-2" />
-                  Start Recording
-                </Button>
-              )}
-            </div>
+          <div
+            ref={transcriptionContainerRef}
+            className="w-full border border-border rounded-lg p-4 h-32 overflow-y-auto bg-muted/50"
+          >
+            <p className="text-sm text-foreground whitespace-pre-wrap">
+              {liveTranscript ||
+                (isRecording
+                  ? 'Listening...'
+                  : 'Press Start to begin recording')}
+            </p>
+          </div>
+        </div>
 
-            {/* Transcription Display */}
-            <div
-              ref={transcriptionContainerRef}
-              className="w-full bg-gray-100 dark:bg-gray-700/50 rounded-2xl p-4 shadow-inner h-32 overflow-y-auto theme-transition"
-            >
-              <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
-                {liveTranscript ||
-                  (isRecording
-                    ? 'Listening...'
-                    : 'Press Start to begin recording')}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Voice Notes List */}
         <VoiceNotes transcriptions={transcriptions} />
       </div>
     </div>

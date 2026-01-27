@@ -1,12 +1,9 @@
-// components/ui/VoiceNotes.tsx
-
 'use client'
 
 import React from 'react'
 import { useRouter } from 'next/navigation'
-import { Calendar } from 'lucide-react'
+import { Calendar, ArrowRight } from 'lucide-react'
 
-// Define the Transcription type
 type Transcription = {
   id: number
   date: string
@@ -16,7 +13,6 @@ type Transcription = {
   nextSteps?: string
 }
 
-// Define the props for the component
 interface VoiceNotesProps {
   transcriptions: Transcription[]
 }
@@ -24,51 +20,47 @@ interface VoiceNotesProps {
 export default function VoiceNotes({ transcriptions }: VoiceNotesProps) {
   const router = useRouter()
 
-  // Handle click on a transcription card
   const handleClick = (id: number) => {
     router.push(`/transcriptions/${id}`)
   }
 
+  if (transcriptions.length === 0) {
+    return (
+      <p className="text-center text-sm text-muted-foreground">
+        No transcriptions yet.
+      </p>
+    )
+  }
+
   return (
-    <div className="w-full">
-      {transcriptions.length === 0 ? (
-        <div className="text-center text-gray-600 dark:text-gray-400">
-          No transcriptions yet.
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-          {transcriptions.map((item) => (
-            <div
-              key={item.id}
-              className="p-4 bg-white dark:bg-gray-800 shadow rounded-lg cursor-pointer hover:shadow-md dark:hover:shadow-gray-700/50 transition-shadow theme-transition"
-              onClick={() => handleClick(item.id)}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                  <Calendar className="w-4 h-4 mr-1" />
-                  {item.date}
-                </div>
-              </div>
-              <div className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-1">
-                {item.title
-                  ? item.title.length > 60
-                    ? item.title.substring(0, 60) + '...'
-                    : item.title
-                  : 'Untitled'}
-              </div>
-              <div className="text-gray-600 dark:text-gray-400">
-                {item.summary
-                  ? item.summary.length > 80
-                    ? item.summary.substring(0, 80) + '...'
-                    : item.summary
-                  : item.text.length > 80
-                  ? item.text.substring(0, 80) + '...'
-                  : item.text}
-              </div>
+    <div className="w-full space-y-3">
+      {transcriptions.map((item) => (
+        <div
+          key={item.id}
+          className="group flex items-center justify-between p-4 border border-border rounded-lg cursor-pointer hover:bg-accent transition-colors"
+          onClick={() => handleClick(item.id)}
+        >
+          <div className="min-w-0 flex-1">
+            <p className="font-medium truncate">
+              {item.title || 'Untitled'}
+            </p>
+            <p className="text-sm text-muted-foreground truncate mt-1">
+              {item.summary
+                ? item.summary.length > 100
+                  ? item.summary.substring(0, 100) + '...'
+                  : item.summary
+                : item.text.length > 100
+                ? item.text.substring(0, 100) + '...'
+                : item.text}
+            </p>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
+              <Calendar className="w-3 h-3" />
+              {item.date}
             </div>
-          ))}
+          </div>
+          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors ml-4 flex-shrink-0" />
         </div>
-      )}
+      ))}
     </div>
   )
 }
