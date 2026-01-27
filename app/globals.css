@@ -63,7 +63,52 @@
   * {
     @apply border-border;
   }
+  html {
+    transition: color 0.3s ease, background-color 0.3s ease;
+  }
   body {
     @apply bg-background text-foreground;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
+}
+
+/* Fun theme toggle animations */
+@keyframes spin-sun {
+  from { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.2); }
+  to { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes spin-moon {
+  from { transform: rotate(0deg) scale(0.5); opacity: 0; }
+  50% { transform: rotate(180deg) scale(1.1); opacity: 1; }
+  to { transform: rotate(360deg) scale(1); opacity: 1; }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-12deg); }
+  75% { transform: rotate(12deg); }
+}
+
+@keyframes stars-twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.theme-toggle-icon {
+  animation: spin-sun 0.5s ease-in-out;
+}
+
+.theme-toggle-btn:hover .theme-toggle-icon {
+  animation: wiggle 0.4s ease-in-out;
+}
+
+.dark .theme-toggle-icon {
+  animation: spin-moon 0.5s ease-in-out;
+}
+
+/* Smooth transitions for themed elements */
+.theme-transition {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }

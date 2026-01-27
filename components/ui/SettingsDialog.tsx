@@ -99,7 +99,7 @@ export function SettingsDialog({ onSettingsChange }: SettingsDialogProps) {
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="absolute top-4 right-4">
+                <Button variant="ghost" size="icon" className="">
                     <Settings className="h-5 w-5" />
                     <span className="sr-only">Settings</span>
                 </Button>
