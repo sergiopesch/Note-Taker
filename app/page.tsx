@@ -51,6 +51,15 @@ export default function Home() {
   const audioContextRef = useRef<AudioContext | null>(null)
   const transcriptionContainerRef = useRef<HTMLDivElement>(null)
 
+  // Streaming: accumulate text across Web Speech API restarts
+  const finalizedTextRef = useRef('')
+  const currentSessionFinalRef = useRef('')
+  const hasSpeechAPIRef = useRef(false)
+
+  // Periodic AI chunk transcription (fallback when no Web Speech API)
+  const chunkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const isProcessingChunkRef = useRef(false)
+
   const loadSettings = useCallback(() => {
     const p = localStorage.getItem('ai_provider') as AIProvider
     if (p && PROVIDER_LABELS[p]) setProvider(p)
@@ -143,13 +152,16 @@ export default function Home() {
     return destination.stream
   }
 
-  // --- Speech Recognition for live preview ---
+  // --- Speech Recognition for live streaming preview ---
 
   const startSpeechRecognition = () => {
     try {
       const SpeechRecognitionAPI =
         window.SpeechRecognition || window.webkitSpeechRecognition
-      if (!SpeechRecognitionAPI) return
+      if (!SpeechRecognitionAPI) {
+        hasSpeechAPIRef.current = false
+        return
+      }
 
       const recognition = new SpeechRecognitionAPI()
       recognition.continuous = true
@@ -157,12 +169,20 @@ export default function Home() {
       recognition.lang = 'en-US'
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let text = ''
+        let sessionFinal = ''
+        let interim = ''
         for (let i = 0; i < event.results.length; i++) {
-          text += event.results[i][0].transcript
-          if (event.results[i].isFinal) text += ' '
+          const transcript = event.results[i][0].transcript
+          if (event.results[i].isFinal) {
+            sessionFinal += transcript + ' '
+          } else {
+            interim += transcript
+          }
         }
-        setLiveTranscript(text)
+        // Track this session's finalized text for carryover on restart
+        currentSessionFinalRef.current = sessionFinal
+        // Display: all previous sessions + this session's final + current interim
+        setLiveTranscript(finalizedTextRef.current + sessionFinal + interim)
       }
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -172,6 +192,10 @@ export default function Home() {
       }
 
       recognition.onend = () => {
+        // Carry over this session's finalized text before restarting
+        finalizedTextRef.current += currentSessionFinalRef.current
+        currentSessionFinalRef.current = ''
+
         if (mediaRecorderRef.current?.state === 'recording') {
           try {
             recognition.start()
@@ -183,14 +207,64 @@ export default function Home() {
 
       recognition.start()
       speechRecognitionRef.current = recognition
+      hasSpeechAPIRef.current = true
     } catch {
       console.warn('SpeechRecognition is not available in this browser')
+      hasSpeechAPIRef.current = false
     }
   }
+
+  // --- Periodic AI chunk transcription (fallback for browsers without Web Speech API) ---
+
+  const processAudioChunk = useCallback(async () => {
+    // Only run as fallback when Web Speech API is not available
+    if (hasSpeechAPIRef.current) return
+    if (isProcessingChunkRef.current) return
+
+    const allChunks = [...audioChunksRef.current]
+    if (allChunks.length === 0) return
+
+    isProcessingChunkRef.current = true
+
+    try {
+      const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm'
+      const blob = new Blob(allChunks, { type: mimeType })
+      if (blob.size === 0) return
+
+      const currentProvider =
+        (localStorage.getItem('ai_provider') as AIProvider) || 'openai'
+      const apiKey = localStorage.getItem(STORAGE_KEYS[currentProvider])
+      if (!apiKey) return
+
+      const formData = new FormData()
+      formData.append('audio', blob, 'recording.webm')
+      formData.append('provider', currentProvider)
+      formData.append('apiKey', apiKey)
+
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      })
+      const result = await response.json()
+
+      if (response.ok && result.text?.trim()) {
+        setLiveTranscript(result.text)
+      }
+    } catch (err) {
+      console.warn('Chunk transcription error:', err)
+    } finally {
+      isProcessingChunkRef.current = false
+    }
+  }, [])
 
   // --- Cleanup ---
 
   const cleanup = () => {
+    if (chunkIntervalRef.current) {
+      clearInterval(chunkIntervalRef.current)
+      chunkIntervalRef.current = null
+    }
+
     if (speechRecognitionRef.current) {
       try {
         speechRecognitionRef.current.stop()
@@ -231,6 +305,10 @@ export default function Home() {
     try {
       setLiveTranscript('')
       audioChunksRef.current = []
+      finalizedTextRef.current = ''
+      currentSessionFinalRef.current = ''
+      hasSpeechAPIRef.current = false
+      isProcessingChunkRef.current = false
       loadSettings()
 
       setStatus('Setting up audio...')
@@ -257,8 +335,13 @@ export default function Home() {
       recorder.start(1000)
       startSpeechRecognition()
 
+      // Start periodic AI chunk transcription (fallback when Web Speech API unavailable)
+      chunkIntervalRef.current = setInterval(() => {
+        processAudioChunk()
+      }, 10000)
+
       setIsRecording(true)
-      setStatus('Recording...')
+      setStatus('Recording — speak now, text appears live...')
     } catch (err) {
       console.error('Failed to start recording:', err)
       setStatus(`Error: ${err instanceof Error ? err.message : String(err)}`)
@@ -268,6 +351,12 @@ export default function Home() {
 
   const stopRecording = async () => {
     setIsRecording(false)
+
+    // Clear chunk processing interval
+    if (chunkIntervalRef.current) {
+      clearInterval(chunkIntervalRef.current)
+      chunkIntervalRef.current = null
+    }
 
     if (speechRecognitionRef.current) {
       try {
@@ -283,6 +372,9 @@ export default function Home() {
       cleanup()
       return
     }
+
+    // Capture the live transcript before processing
+    const liveText = (finalizedTextRef.current + currentSessionFinalRef.current).trim()
 
     const audioBlob = await new Promise<Blob>((resolve) => {
       recorder.onstop = () => {
@@ -322,7 +414,12 @@ export default function Home() {
       return
     }
 
-    setStatus(`Transcribing with ${PROVIDER_LABELS[currentProvider]}...`)
+    // Keep showing the live transcript while we finalize
+    if (liveText) {
+      setLiveTranscript(liveText)
+    }
+
+    setStatus(`Finalizing transcription with ${PROVIDER_LABELS[currentProvider]}...`)
 
     try {
       const formData = new FormData()
@@ -343,9 +440,41 @@ export default function Home() {
 
       const transcribedText: string = result.text
       if (!transcribedText?.trim()) {
+        // Fall back to the live transcript if AI returned nothing
+        if (liveText) {
+          setLiveTranscript(liveText)
+          setStatus('Generating summary...')
+          const summaryResult = await generateSummaryAction({
+            transcriptionText: liveText,
+            provider: currentProvider,
+            apiKey,
+          })
+
+          const newTranscription: Transcription = {
+            id: Date.now(),
+            date: new Date().toLocaleString(),
+            text: liveText,
+          }
+
+          if ('title' in summaryResult) {
+            newTranscription.title = summaryResult.title
+            newTranscription.summary = summaryResult.summary
+            newTranscription.nextSteps = summaryResult.nextSteps
+          }
+
+          const updated = [newTranscription, ...transcriptions]
+          localStorage.setItem('transcriptions', JSON.stringify(updated))
+          setTranscriptions(updated)
+          setLiveTranscript('')
+          setStatus('')
+          return
+        }
         setStatus('No speech detected in the recording')
         return
       }
+
+      // Show the final AI transcription
+      setLiveTranscript(transcribedText)
 
       setStatus('Generating summary...')
       const summaryResult = await generateSummaryAction({
@@ -428,13 +557,25 @@ export default function Home() {
 
           <div
             ref={transcriptionContainerRef}
-            className="w-full border border-border rounded-lg p-4 h-32 overflow-y-auto bg-muted/50"
+            className="w-full border border-border rounded-lg p-4 h-48 overflow-y-auto bg-muted/50"
           >
             <p className="text-sm text-foreground whitespace-pre-wrap">
-              {liveTranscript ||
-                (isRecording
-                  ? 'Listening...'
-                  : 'Press Start to begin recording')}
+              {liveTranscript ? (
+                <>
+                  {liveTranscript}
+                  {isRecording && (
+                    <span className="inline-block w-1.5 h-4 ml-0.5 bg-foreground/70 animate-pulse align-text-bottom" />
+                  )}
+                </>
+              ) : isRecording ? (
+                <span className="text-muted-foreground animate-pulse">
+                  Listening... speak now
+                </span>
+              ) : (
+                <span className="text-muted-foreground">
+                  Press Start to begin recording
+                </span>
+              )}
             </p>
           </div>
         </div>
