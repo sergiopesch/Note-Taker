@@ -5,15 +5,8 @@ import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Trash2, ArrowLeft } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
-
-type Transcription = {
-  id: number
-  date: string
-  text: string
-  title?: string
-  summary?: string
-  nextSteps?: string
-}
+import { SpeakerSegmentDisplay } from '@/components/ui/SpeakerSegmentDisplay'
+import type { Transcription } from '@/lib/types'
 
 export default function TranscriptionDetail() {
   const [transcription, setTranscription] = useState<Transcription | null>(null)
@@ -114,11 +107,20 @@ export default function TranscriptionDetail() {
             <section>
               <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3">
                 Transcription
+                {transcription.segments && transcription.segments.length > 0 && (
+                  <span className="ml-2 text-[10px] font-normal normal-case tracking-normal text-muted-foreground/70">
+                    ({new Set(transcription.segments.map(s => s.speaker)).size} speakers)
+                  </span>
+                )}
               </h2>
               <div className="border border-border rounded-lg p-4 bg-muted/50">
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {transcription.text}
-                </p>
+                {transcription.segments && transcription.segments.length > 0 ? (
+                  <SpeakerSegmentDisplay segments={transcription.segments} />
+                ) : (
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {transcription.text}
+                  </p>
+                )}
               </div>
             </section>
 

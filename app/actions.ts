@@ -24,7 +24,12 @@ export async function generateSummaryAction(data: {
 
         const { transcriptionText, provider, apiKey } = result.data
 
-        const prompt = `Please analyze the following transcription and provide a short and precise title (max 10 words), a concise summary, and next steps. Return ONLY the response in valid JSON format with the keys "title", "summary", and "nextSteps". Do not include any explanations or additional text.
+        const hasSpeakers = transcriptionText.includes('Speaker 1:') || transcriptionText.includes('Speaker 2:')
+        const speakerInstruction = hasSpeakers
+            ? ' The transcription includes speaker labels (e.g. "Speaker 1:", "Speaker 2:"). Reference speakers in the summary when relevant.'
+            : ''
+
+        const prompt = `Please analyze the following transcription and provide a short and precise title (max 10 words), a concise summary, and next steps.${speakerInstruction} Return ONLY the response in valid JSON format with the keys "title", "summary", and "nextSteps". Do not include any explanations or additional text.
 
 Transcription:
 """

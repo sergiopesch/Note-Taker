@@ -3,15 +3,7 @@
 import React from 'react'
 import { useRouter } from 'next/navigation'
 import { Calendar, ArrowRight } from 'lucide-react'
-
-type Transcription = {
-  id: number
-  date: string
-  text: string
-  title?: string
-  summary?: string
-  nextSteps?: string
-}
+import type { Transcription } from '@/lib/types'
 
 interface VoiceNotesProps {
   transcriptions: Transcription[]

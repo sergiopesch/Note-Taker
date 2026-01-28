@@ -17,6 +17,7 @@ import { Settings } from 'lucide-react'
 
 export type AIProvider = 'openai' | 'claude' | 'gemini'
 export type AudioSource = 'mic' | 'system' | 'both'
+export type DiarizationMode = 'off' | 'on'
 
 const PROVIDER_LABELS: Record<AIProvider, string> = {
     openai: 'OpenAI',
@@ -54,6 +55,7 @@ export function SettingsDialog({ onSettingsChange }: SettingsDialogProps) {
         gemini: '',
     })
     const [audioSource, setAudioSource] = useState<AudioSource>('mic')
+    const [diarization, setDiarization] = useState<DiarizationMode>('off')
     const [isOpen, setIsOpen] = useState(false)
 
     useEffect(() => {
@@ -67,6 +69,11 @@ export function SettingsDialog({ onSettingsChange }: SettingsDialogProps) {
             setAudioSource(storedSource)
         }
 
+        const storedDiarization = localStorage.getItem('diarization') as DiarizationMode
+        if (storedDiarization === 'on' || storedDiarization === 'off') {
+            setDiarization(storedDiarization)
+        }
+
         setApiKeys({
             openai: localStorage.getItem('openai_api_key') || '',
             claude: localStorage.getItem('claude_api_key') || '',
@@ -77,6 +84,7 @@ export function SettingsDialog({ onSettingsChange }: SettingsDialogProps) {
     const handleSave = () => {
         localStorage.setItem('ai_provider', provider)
         localStorage.setItem('audio_source', audioSource)
+        localStorage.setItem('diarization', diarization)
 
         for (const p of ['openai', 'claude', 'gemini'] as AIProvider[]) {
             const trimmed = apiKeys[p]?.trim()
@@ -157,6 +165,25 @@ export function SettingsDialog({ onSettingsChange }: SettingsDialogProps) {
                         {audioSource !== 'mic' && (
                             <p className="text-xs text-muted-foreground">
                                 System audio requires screen/tab sharing. Check &quot;Share audio&quot; in the browser dialog.
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Speaker Diarization */}
+                    <div className="space-y-2">
+                        <Label htmlFor="diarization">Speaker Diarization</Label>
+                        <select
+                            id="diarization"
+                            value={diarization}
+                            onChange={(e) => setDiarization(e.target.value as DiarizationMode)}
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                            <option value="off">Off</option>
+                            <option value="on">On &mdash; Identify speakers</option>
+                        </select>
+                        {diarization === 'on' && (
+                            <p className="text-xs text-muted-foreground">
+                                Identifies and labels different speakers in the transcript. Works best with clear, multi-speaker audio.
                             </p>
                         )}
                     </div>
