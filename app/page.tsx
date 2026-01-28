@@ -8,15 +8,8 @@ import { SettingsDialog } from '@/components/ui/SettingsDialog'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import type { AIProvider, AudioSource } from '@/components/ui/SettingsDialog'
 import { generateSummaryAction } from '@/app/actions'
-
-type Transcription = {
-  id: number
-  date: string
-  text: string
-  title?: string
-  summary?: string
-  nextSteps?: string
-}
+import type { Transcription, SpeakerSegment } from '@/lib/types'
+import { SpeakerSegmentDisplay } from '@/components/ui/SpeakerSegmentDisplay'
 
 const PROVIDER_LABELS: Record<AIProvider, string> = {
   openai: 'OpenAI',
@@ -39,10 +32,12 @@ const STORAGE_KEYS: Record<AIProvider, string> = {
 export default function Home() {
   const [isRecording, setIsRecording] = useState(false)
   const [liveTranscript, setLiveTranscript] = useState('')
+  const [liveSegments, setLiveSegments] = useState<SpeakerSegment[] | null>(null)
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([])
   const [status, setStatus] = useState('')
   const [provider, setProvider] = useState<AIProvider>('openai')
   const [audioSource, setAudioSource] = useState<AudioSource>('mic')
+  const [diarization, setDiarization] = useState(false)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -66,6 +61,8 @@ export default function Home() {
 
     const s = localStorage.getItem('audio_source') as AudioSource
     if (s && SOURCE_LABELS[s]) setAudioSource(s)
+
+    setDiarization(localStorage.getItem('diarization') === 'on')
   }, [])
 
   // Load settings and transcriptions on mount
@@ -87,7 +84,7 @@ export default function Home() {
       transcriptionContainerRef.current.scrollTop =
         transcriptionContainerRef.current.scrollHeight
     }
-  }, [liveTranscript])
+  }, [liveTranscript, liveSegments])
 
   // --- Audio capture ---
 
@@ -304,6 +301,7 @@ export default function Home() {
   const startRecording = async () => {
     try {
       setLiveTranscript('')
+      setLiveSegments(null)
       audioChunksRef.current = []
       finalizedTextRef.current = ''
       currentSessionFinalRef.current = ''
@@ -406,6 +404,7 @@ export default function Home() {
     const currentProvider =
       (localStorage.getItem('ai_provider') as AIProvider) || 'openai'
     const apiKey = localStorage.getItem(STORAGE_KEYS[currentProvider])
+    const isDiarized = localStorage.getItem('diarization') === 'on'
 
     if (!apiKey) {
       setStatus(
@@ -419,13 +418,17 @@ export default function Home() {
       setLiveTranscript(liveText)
     }
 
-    setStatus(`Finalizing transcription with ${PROVIDER_LABELS[currentProvider]}...`)
+    const diarizeLabel = isDiarized ? ' with speaker identification' : ''
+    setStatus(`Finalizing transcription${diarizeLabel} with ${PROVIDER_LABELS[currentProvider]}...`)
 
     try {
       const formData = new FormData()
       formData.append('audio', audioBlob, 'recording.webm')
       formData.append('provider', currentProvider)
       formData.append('apiKey', apiKey)
+      if (isDiarized) {
+        formData.append('diarization', 'on')
+      }
 
       const response = await fetch('/api/transcribe', {
         method: 'POST',
@@ -439,6 +442,8 @@ export default function Home() {
       }
 
       const transcribedText: string = result.text
+      const segments: SpeakerSegment[] | undefined = result.segments
+
       if (!transcribedText?.trim()) {
         // Fall back to the live transcript if AI returned nothing
         if (liveText) {
@@ -466,6 +471,7 @@ export default function Home() {
           localStorage.setItem('transcriptions', JSON.stringify(updated))
           setTranscriptions(updated)
           setLiveTranscript('')
+          setLiveSegments(null)
           setStatus('')
           return
         }
@@ -473,12 +479,20 @@ export default function Home() {
         return
       }
 
-      // Show the final AI transcription
+      // Show the final AI transcription (with or without speaker segments)
       setLiveTranscript(transcribedText)
+      if (segments && segments.length > 0) {
+        setLiveSegments(segments)
+      }
+
+      // Build the text for summary — include speaker labels if diarized
+      const summaryInput = segments && segments.length > 0
+        ? segments.map(s => `${s.speaker}: ${s.text}`).join('\n')
+        : transcribedText
 
       setStatus('Generating summary...')
       const summaryResult = await generateSummaryAction({
-        transcriptionText: transcribedText,
+        transcriptionText: summaryInput,
         provider: currentProvider,
         apiKey,
       })
@@ -487,6 +501,7 @@ export default function Home() {
         id: Date.now(),
         date: new Date().toLocaleString(),
         text: transcribedText,
+        segments: segments && segments.length > 0 ? segments : undefined,
       }
 
       if ('error' in summaryResult && summaryResult.error) {
@@ -502,6 +517,7 @@ export default function Home() {
       localStorage.setItem('transcriptions', JSON.stringify(updated))
       setTranscriptions(updated)
       setLiveTranscript('')
+      setLiveSegments(null)
       setStatus('')
     } catch (error) {
       console.error('Processing error:', error)
@@ -524,6 +540,7 @@ export default function Home() {
           </h1>
           <p className="text-sm text-muted-foreground">
             {SOURCE_LABELS[audioSource]} &middot; {PROVIDER_LABELS[provider]}
+            {diarization && ' \u00b7 Speakers'}
           </p>
         </div>
 
@@ -559,24 +576,28 @@ export default function Home() {
             ref={transcriptionContainerRef}
             className="w-full border border-border rounded-lg p-4 h-48 overflow-y-auto bg-muted/50"
           >
-            <p className="text-sm text-foreground whitespace-pre-wrap">
-              {liveTranscript ? (
-                <>
-                  {liveTranscript}
-                  {isRecording && (
-                    <span className="inline-block w-1.5 h-4 ml-0.5 bg-foreground/70 animate-pulse align-text-bottom" />
-                  )}
-                </>
-              ) : isRecording ? (
-                <span className="text-muted-foreground animate-pulse">
-                  Listening... speak now
-                </span>
-              ) : (
-                <span className="text-muted-foreground">
-                  Press Start to begin recording
-                </span>
-              )}
-            </p>
+            {liveSegments && liveSegments.length > 0 ? (
+              <SpeakerSegmentDisplay segments={liveSegments} />
+            ) : (
+              <p className="text-sm text-foreground whitespace-pre-wrap">
+                {liveTranscript ? (
+                  <>
+                    {liveTranscript}
+                    {isRecording && (
+                      <span className="inline-block w-1.5 h-4 ml-0.5 bg-foreground/70 animate-pulse align-text-bottom" />
+                    )}
+                  </>
+                ) : isRecording ? (
+                  <span className="text-muted-foreground animate-pulse">
+                    Listening... speak now
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    Press Start to begin recording
+                  </span>
+                )}
+              </p>
+            )}
           </div>
         </div>
 
