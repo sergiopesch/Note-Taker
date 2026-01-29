@@ -30,9 +30,10 @@ function buildSpeakerMap(segments: SpeakerSegment[]): Map<string, number> {
 interface SpeakerSegmentDisplayProps {
   segments: SpeakerSegment[]
   compact?: boolean
+  speakerNames?: Record<string, string>
 }
 
-export function SpeakerSegmentDisplay({ segments, compact }: SpeakerSegmentDisplayProps) {
+export function SpeakerSegmentDisplay({ segments, compact, speakerNames }: SpeakerSegmentDisplayProps) {
   const speakerMap = buildSpeakerMap(segments)
 
   if (segments.length === 0) {
@@ -51,7 +52,7 @@ export function SpeakerSegmentDisplay({ segments, compact }: SpeakerSegmentDispl
             className={`border-l-2 pl-3 ${style.border}`}
           >
             <span className={`text-xs uppercase tracking-wide ${style.label}`}>
-              {segment.speaker}
+              {(speakerNames?.[segment.speaker] || segment.speaker)}
             </span>
             <p className={`text-sm text-foreground ${compact ? 'mt-0.5' : 'mt-1'}`}>
               {segment.text}

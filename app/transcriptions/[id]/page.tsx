@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Trash2, ArrowLeft } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { SpeakerSegmentDisplay } from '@/components/ui/SpeakerSegmentDisplay'
+import { SpeakerNameWizard } from '@/components/ui/SpeakerNameWizard'
 import type { Transcription } from '@/lib/types'
 import { safeGetFromStorage, safeSetInStorage } from '@/lib/storage'
 
@@ -42,7 +43,7 @@ export default function TranscriptionDetail() {
     setNextSteps(found.nextSteps || '')
   }, [id, router])
 
-  const saveTitle = () => {
+  const persistUpdate = (patch: Partial<Transcription>) => {
     if (!transcription) return
 
     const transcriptions = safeGetFromStorage<Transcription[]>('transcriptions')
@@ -50,13 +51,18 @@ export default function TranscriptionDetail() {
 
     const updatedTranscriptions = transcriptions.map((item) => {
       if (item.id === transcription.id) {
-        return { ...item, title }
+        return { ...item, ...patch }
       }
       return item
     })
 
     safeSetInStorage('transcriptions', updatedTranscriptions)
-    setTranscription({ ...transcription, title })
+    setTranscription({ ...transcription, ...patch })
+  }
+
+  const saveTitle = () => {
+    if (!transcription) return
+    persistUpdate({ title })
   }
 
   const handleDelete = () => {
@@ -110,14 +116,27 @@ export default function TranscriptionDetail() {
                   </span>
                 )}
               </h2>
-              <div className="border border-border rounded-lg p-4 bg-muted/50">
-                {transcription.segments && transcription.segments.length > 0 ? (
-                  <SpeakerSegmentDisplay segments={transcription.segments} />
-                ) : (
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {transcription.text}
-                  </p>
+              <div className="space-y-3">
+                {transcription.segments && transcription.segments.length > 0 && (
+                  <SpeakerNameWizard
+                    segments={transcription.segments}
+                    initialNames={transcription.speakerNames}
+                    onSave={(speakerNames) => persistUpdate({ speakerNames })}
+                  />
                 )}
+
+                <div className="border border-border rounded-lg p-4 bg-muted/50">
+                  {transcription.segments && transcription.segments.length > 0 ? (
+                    <SpeakerSegmentDisplay
+                      segments={transcription.segments}
+                      speakerNames={transcription.speakerNames}
+                    />
+                  ) : (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                      {transcription.text}
+                    </p>
+                  )}
+                </div>
               </div>
             </section>
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { Mic, StopCircle } from 'lucide-react'
+import { Mic, StopCircle, Sparkles, X } from 'lucide-react'
 import VoiceNotes from '@/components/ui/VoiceNotes'
 import { SettingsDialog } from '@/components/ui/SettingsDialog'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -41,6 +41,10 @@ export default function Home() {
   const [audioSource, setAudioSource] = useState<AudioSource>('mic')
   const [diarization, setDiarization] = useState(false)
 
+  // Wrap-up countdown
+  const [wrapCountdown, setWrapCountdown] = useState<number | null>(null)
+  const wrapIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null)
@@ -48,7 +52,7 @@ export default function Home() {
   const audioContextRef = useRef<AudioContext | null>(null)
   const transcriptionContainerRef = useRef<HTMLDivElement>(null)
 
-  // Streaming: accumulate text across Web Speech API restarts
+  // Streaming transcript
   const finalizedTextRef = useRef('')
   const interimTextRef = useRef('')
   const hasSpeechAPIRef = useRef(false)
@@ -59,7 +63,6 @@ export default function Home() {
   // Periodic AI chunk transcription (fallback when no Web Speech API)
   const chunkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const isProcessingChunkRef = useRef(false)
-  const lastProcessedChunkIndexRef = useRef(0)
   const chunkTranscriptRef = useRef('')
   const lastChunkFullTextRef = useRef('')
 
@@ -191,7 +194,10 @@ export default function Home() {
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         // Some browsers will abort recognition on focus/click/visibility transitions.
         // If we're still recording, we want to restart immediately.
-        if ((event.error === 'aborted' || event.error === 'no-speech') && mediaRecorderRef.current?.state === 'recording') {
+        if (
+          (event.error === 'aborted' || event.error === 'no-speech') &&
+          mediaRecorderRef.current?.state === 'recording'
+        ) {
           setTimeout(() => {
             try {
               recognition.start()
@@ -203,14 +209,15 @@ export default function Home() {
         }
 
         // If speech recognition is blocked/unsupported at runtime, fall back to AI chunk transcription.
-        // Common cases: user denied permission, browser doesn't support the service, etc.
         if (
           event.error === 'not-allowed' ||
           event.error === 'service-not-allowed' ||
           event.error === 'audio-capture'
         ) {
           hasSpeechAPIRef.current = false
-          setStatus(`SpeechRecognition error: ${event.error}. Falling back to AI live preview...`)
+          setStatus(
+            `SpeechRecognition error: ${event.error}. Falling back to AI live preview...`
+          )
         }
 
         if (event.error !== 'no-speech' && event.error !== 'aborted') {
@@ -294,7 +301,7 @@ export default function Home() {
       if (!apiKey) return
 
       const formData = new FormData()
-      formData.append('audio', blob, 'chunk.webm')
+      formData.append('audio', blob, 'recording.webm')
       formData.append('provider', currentProvider)
       formData.append('apiKey', apiKey)
 
@@ -314,7 +321,9 @@ export default function Home() {
         let next = ''
         if (prevFull && full.toLowerCase().startsWith(prevFull.toLowerCase())) {
           const tail = full.slice(prevFull.length).trim()
-          next = tail ? (chunkTranscriptRef.current + ' ' + tail).trim() : chunkTranscriptRef.current
+          next = tail
+            ? (chunkTranscriptRef.current + ' ' + tail).trim()
+            : chunkTranscriptRef.current
         } else {
           next = full
         }
@@ -339,6 +348,12 @@ export default function Home() {
       clearInterval(chunkIntervalRef.current)
       chunkIntervalRef.current = null
     }
+
+    if (wrapIntervalRef.current) {
+      clearInterval(wrapIntervalRef.current)
+      wrapIntervalRef.current = null
+    }
+    setWrapCountdown(null)
 
     if (speechRecognitionRef.current) {
       try {
@@ -376,6 +391,39 @@ export default function Home() {
 
   // --- Recording lifecycle ---
 
+  const cancelWrap = () => {
+    if (wrapIntervalRef.current) {
+      clearInterval(wrapIntervalRef.current)
+      wrapIntervalRef.current = null
+    }
+    setWrapCountdown(null)
+    setStatus('Recording — keep going...')
+  }
+
+  const startWrapCountdown = () => {
+    if (!isRecording) return
+    if (wrapIntervalRef.current) return
+
+    let remaining = 10
+    setWrapCountdown(remaining)
+    setStatus('Wrap-up queued. You have 10 seconds to cancel…')
+
+    wrapIntervalRef.current = setInterval(() => {
+      remaining -= 1
+      setWrapCountdown(remaining)
+
+      if (remaining <= 0) {
+        if (wrapIntervalRef.current) {
+          clearInterval(wrapIntervalRef.current)
+          wrapIntervalRef.current = null
+        }
+        setWrapCountdown(null)
+        // Trigger stop + summary
+        stopRecording()
+      }
+    }, 1000)
+  }
+
   const startRecording = async () => {
     try {
       setLiveTranscript('')
@@ -386,10 +434,15 @@ export default function Home() {
       hasSpeechAPIRef.current = false
       speechResultReceivedRef.current = false
       isProcessingChunkRef.current = false
-      lastProcessedChunkIndexRef.current = 0
       chunkTranscriptRef.current = ''
       lastChunkFullTextRef.current = ''
       loadSettings()
+
+      if (wrapIntervalRef.current) {
+        clearInterval(wrapIntervalRef.current)
+        wrapIntervalRef.current = null
+      }
+      setWrapCountdown(null)
 
       setStatus('Setting up audio...')
       const stream = await getAudioStream()
@@ -417,19 +470,17 @@ export default function Home() {
       startSpeechRecognition()
 
       // Start periodic AI chunk transcription (fallback when Web Speech API unavailable)
-      // Keep this fast so "live" feels live.
       chunkIntervalRef.current = setInterval(() => {
         processAudioChunk()
       }, 1500)
 
-      // Kick the fallback once quickly (helps the first words appear without waiting a full interval)
+      // Kick the fallback once quickly
       setTimeout(() => {
         processAudioChunk()
       }, 800)
 
       setIsRecording(true)
       // We may not know yet if SpeechRecognition will actually produce results.
-      // Default to live; if it stays silent, AI fallback will kick in within ~2s.
       setStatus('Recording — speak now, text appears live...')
     } catch (err) {
       console.error('Failed to start recording:', err)
@@ -440,6 +491,12 @@ export default function Home() {
 
   const stopRecording = async () => {
     setIsRecording(false)
+
+    if (wrapIntervalRef.current) {
+      clearInterval(wrapIntervalRef.current)
+      wrapIntervalRef.current = null
+    }
+    setWrapCountdown(null)
 
     // Clear chunk processing interval
     if (chunkIntervalRef.current) {
@@ -510,7 +567,9 @@ export default function Home() {
     }
 
     const diarizeLabel = isDiarized ? ' with speaker identification' : ''
-    setStatus(`Finalizing transcription${diarizeLabel} with ${PROVIDER_LABELS[currentProvider]}...`)
+    setStatus(
+      `Finalizing transcription${diarizeLabel} with ${PROVIDER_LABELS[currentProvider]}...`
+    )
 
     try {
       const formData = new FormData()
@@ -586,9 +645,10 @@ export default function Home() {
       }
 
       // Build the text for summary — include speaker labels if diarized
-      const summaryInput = segments && segments.length > 0
-        ? segments.map(s => `${s.speaker}: ${s.text}`).join('\n')
-        : transcribedText
+      const summaryInput =
+        segments && segments.length > 0
+          ? segments.map((s) => `${s.speaker}: ${s.text}`).join('\n')
+          : transcribedText
 
       setStatus('Generating summary...')
       const summaryResult = await generateSummaryAction({
@@ -635,9 +695,7 @@ export default function Home() {
       </div>
       <div className="w-full max-w-2xl">
         <div className="flex flex-col items-center mb-12">
-          <h1 className="text-4xl font-bold tracking-tight mb-1">
-            Note Taker
-          </h1>
+          <h1 className="text-4xl font-bold tracking-tight mb-1">Note Taker</h1>
           <p className="text-sm text-muted-foreground">
             {SOURCE_LABELS[audioSource]} &middot; {PROVIDER_LABELS[provider]}
             {diarization && ' \u00b7 Speakers'}
@@ -646,20 +704,44 @@ export default function Home() {
 
         <div className="flex flex-col items-center mb-10">
           {status && (
-            <p className="text-sm text-muted-foreground mb-4">{status}</p>
+            <p className="text-sm text-muted-foreground mb-4 text-center">{status}</p>
           )}
 
-          <div className="mb-6">
+          <div className="mb-6 flex items-center gap-3">
             {isRecording ? (
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={stopRecording}
-                className="rounded-full px-8"
-              >
-                <StopCircle className="w-5 h-5 mr-2" />
-                Stop Recording
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={stopRecording}
+                  className="rounded-full px-7"
+                >
+                  <StopCircle className="w-5 h-5 mr-2" />
+                  Stop
+                </Button>
+
+                <Button
+                  size="lg"
+                  onClick={startWrapCountdown}
+                  disabled={wrapCountdown !== null}
+                  className="rounded-full px-7"
+                >
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  {wrapCountdown !== null ? `Wrap it (${wrapCountdown})` : 'Wrap it'}
+                </Button>
+
+                {wrapCountdown !== null && (
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    onClick={cancelWrap}
+                    className="rounded-full px-5"
+                  >
+                    <X className="w-5 h-5 mr-2" />
+                    Cancel
+                  </Button>
+                )}
+              </>
             ) : (
               <Button
                 size="lg"
