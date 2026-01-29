@@ -7,6 +7,7 @@ import { Trash2, ArrowLeft } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { SpeakerSegmentDisplay } from '@/components/ui/SpeakerSegmentDisplay'
 import type { Transcription } from '@/lib/types'
+import { safeGetFromStorage, safeSetInStorage } from '@/lib/storage'
 
 export default function TranscriptionDetail() {
   const [transcription, setTranscription] = useState<Transcription | null>(null)
@@ -23,50 +24,46 @@ export default function TranscriptionDetail() {
       return
     }
 
-    const storedTranscriptions = localStorage.getItem('transcriptions')
-    if (storedTranscriptions) {
-      const transcriptions: Transcription[] = JSON.parse(storedTranscriptions)
-      const found = transcriptions.find(
-        (item: Transcription) => item.id === Number(id)
-      )
-      if (found) {
-        setTranscription(found)
-        setTitle(found.title || '')
-        setSummary(found.summary || '')
-        setNextSteps(found.nextSteps || '')
-      } else {
-        router.push('/')
-      }
-    } else {
+    const transcriptions = safeGetFromStorage<Transcription[]>('transcriptions')
+    if (!transcriptions) {
       router.push('/')
+      return
     }
+
+    const found = transcriptions.find((item) => item.id === Number(id))
+    if (!found) {
+      router.push('/')
+      return
+    }
+
+    setTranscription(found)
+    setTitle(found.title || '')
+    setSummary(found.summary || '')
+    setNextSteps(found.nextSteps || '')
   }, [id, router])
 
   const saveTitle = () => {
-    if (transcription) {
-      const storedTranscriptions = localStorage.getItem('transcriptions')
-      if (storedTranscriptions) {
-        const transcriptions: Transcription[] = JSON.parse(storedTranscriptions)
-        const updatedTranscriptions = transcriptions.map((item) => {
-          if (item.id === transcription.id) {
-            return { ...item, title: title }
-          }
-          return item
-        })
-        localStorage.setItem('transcriptions', JSON.stringify(updatedTranscriptions))
-        setTranscription({ ...transcription, title: title })
+    if (!transcription) return
+
+    const transcriptions = safeGetFromStorage<Transcription[]>('transcriptions')
+    if (!transcriptions) return
+
+    const updatedTranscriptions = transcriptions.map((item) => {
+      if (item.id === transcription.id) {
+        return { ...item, title }
       }
-    }
+      return item
+    })
+
+    safeSetInStorage('transcriptions', updatedTranscriptions)
+    setTranscription({ ...transcription, title })
   }
 
   const handleDelete = () => {
-    const storedTranscriptions = localStorage.getItem('transcriptions')
-    if (storedTranscriptions) {
-      const transcriptions: Transcription[] = JSON.parse(storedTranscriptions)
-      const updatedTranscriptions = transcriptions.filter(
-        (item: Transcription) => item.id !== Number(id)
-      )
-      localStorage.setItem('transcriptions', JSON.stringify(updatedTranscriptions))
+    const transcriptions = safeGetFromStorage<Transcription[]>('transcriptions')
+    if (transcriptions) {
+      const updated = transcriptions.filter((item) => item.id !== Number(id))
+      safeSetInStorage('transcriptions', updated)
     }
     router.push('/')
   }

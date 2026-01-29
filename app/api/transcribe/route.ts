@@ -150,6 +150,14 @@ async function transcribeWithOpenAI(audio: File, apiKey: string, diarize: boolea
     const buffer = Buffer.from(await audio.arrayBuffer())
     const base64 = buffer.toString('base64')
 
+    // OpenAI chat audio input only supports a limited set of formats.
+    // We prefer WAV and the client converts to WAV when diarization is enabled.
+    const audioFormat = (audio.type || '').includes('wav')
+        ? 'wav'
+        : (audio.type || '').includes('mpeg')
+            ? 'mp3'
+            : 'wav'
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -166,7 +174,7 @@ async function transcribeWithOpenAI(audio: File, apiKey: string, diarize: boolea
                             type: 'input_audio',
                             input_audio: {
                                 data: base64,
-                                format: 'wav',
+                                format: audioFormat,
                             },
                         },
                         {

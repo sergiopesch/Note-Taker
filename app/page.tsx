@@ -10,6 +10,8 @@ import type { AIProvider, AudioSource } from '@/components/ui/SettingsDialog'
 import { generateSummaryAction } from '@/app/actions'
 import type { Transcription, SpeakerSegment } from '@/lib/types'
 import { SpeakerSegmentDisplay } from '@/components/ui/SpeakerSegmentDisplay'
+import { safeGetFromStorage, safeSetInStorage } from '@/lib/storage'
+import { blobToWav } from '@/lib/wav'
 
 const PROVIDER_LABELS: Record<AIProvider, string> = {
   openai: 'OpenAI',
@@ -54,6 +56,8 @@ export default function Home() {
   // Periodic AI chunk transcription (fallback when no Web Speech API)
   const chunkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const isProcessingChunkRef = useRef(false)
+  const lastProcessedChunkIndexRef = useRef(0)
+  const chunkTranscriptRef = useRef('')
 
   const loadSettings = useCallback(() => {
     const p = localStorage.getItem('ai_provider') as AIProvider
@@ -68,14 +72,8 @@ export default function Home() {
   // Load settings and transcriptions on mount
   useEffect(() => {
     loadSettings()
-    const stored = localStorage.getItem('transcriptions')
-    if (stored) {
-      try {
-        setTranscriptions(JSON.parse(stored))
-      } catch {
-        // ignore corrupt data
-      }
-    }
+    const stored = safeGetFromStorage<Transcription[]>('transcriptions')
+    if (stored) setTranscriptions(stored)
   }, [loadSettings])
 
   // Auto-scroll the transcription box
@@ -218,14 +216,18 @@ export default function Home() {
     if (hasSpeechAPIRef.current) return
     if (isProcessingChunkRef.current) return
 
-    const allChunks = [...audioChunksRef.current]
+    const allChunks = audioChunksRef.current
     if (allChunks.length === 0) return
+
+    const fromIndex = lastProcessedChunkIndexRef.current
+    const newChunks = allChunks.slice(fromIndex)
+    if (newChunks.length === 0) return
 
     isProcessingChunkRef.current = true
 
     try {
       const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm'
-      const blob = new Blob(allChunks, { type: mimeType })
+      const blob = new Blob(newChunks, { type: mimeType })
       if (blob.size === 0) return
 
       const currentProvider =
@@ -234,7 +236,7 @@ export default function Home() {
       if (!apiKey) return
 
       const formData = new FormData()
-      formData.append('audio', blob, 'recording.webm')
+      formData.append('audio', blob, 'chunk.webm')
       formData.append('provider', currentProvider)
       formData.append('apiKey', apiKey)
 
@@ -245,7 +247,13 @@ export default function Home() {
       const result = await response.json()
 
       if (response.ok && result.text?.trim()) {
-        setLiveTranscript(result.text)
+        // Advance cursor only on success
+        lastProcessedChunkIndexRef.current = fromIndex + newChunks.length
+
+        // Append chunk transcription to our incremental buffer
+        const next = (chunkTranscriptRef.current + ' ' + result.text).trim()
+        chunkTranscriptRef.current = next
+        setLiveTranscript(next)
       }
     } catch (err) {
       console.warn('Chunk transcription error:', err)
@@ -307,6 +315,8 @@ export default function Home() {
       currentSessionFinalRef.current = ''
       hasSpeechAPIRef.current = false
       isProcessingChunkRef.current = false
+      lastProcessedChunkIndexRef.current = 0
+      chunkTranscriptRef.current = ''
       loadSettings()
 
       setStatus('Setting up audio...')
@@ -423,7 +433,16 @@ export default function Home() {
 
     try {
       const formData = new FormData()
-      formData.append('audio', audioBlob, 'recording.webm')
+
+      // For OpenAI diarization via chat audio, send WAV to avoid format mismatch.
+      if (currentProvider === 'openai' && isDiarized) {
+        setStatus('Preparing audio for diarization...')
+        const wavBlob = await blobToWav(audioBlob)
+        formData.append('audio', wavBlob, 'recording.wav')
+      } else {
+        formData.append('audio', audioBlob, 'recording.webm')
+      }
+
       formData.append('provider', currentProvider)
       formData.append('apiKey', apiKey)
       if (isDiarized) {
@@ -468,7 +487,7 @@ export default function Home() {
           }
 
           const updated = [newTranscription, ...transcriptions]
-          localStorage.setItem('transcriptions', JSON.stringify(updated))
+          safeSetInStorage('transcriptions', updated)
           setTranscriptions(updated)
           setLiveTranscript('')
           setLiveSegments(null)
@@ -514,7 +533,7 @@ export default function Home() {
       }
 
       const updated = [newTranscription, ...transcriptions]
-      localStorage.setItem('transcriptions', JSON.stringify(updated))
+      safeSetInStorage('transcriptions', updated)
       setTranscriptions(updated)
       setLiveTranscript('')
       setLiveSegments(null)
