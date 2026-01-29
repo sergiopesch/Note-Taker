@@ -52,6 +52,9 @@ export default function Home() {
   const finalizedTextRef = useRef('')
   const currentSessionFinalRef = useRef('')
   const hasSpeechAPIRef = useRef(false)
+  // Some browsers expose SpeechRecognition but never produce results (permissions, service issues).
+  // We only treat it as "working" after we actually receive a result.
+  const speechResultReceivedRef = useRef(false)
 
   // Periodic AI chunk transcription (fallback when no Web Speech API)
   const chunkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -164,6 +167,10 @@ export default function Home() {
       recognition.lang = 'en-US'
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
+        // Mark SpeechRecognition as actually working.
+        speechResultReceivedRef.current = true
+        hasSpeechAPIRef.current = true
+
         let sessionFinal = ''
         let interim = ''
         for (let i = 0; i < event.results.length; i++) {
@@ -211,9 +218,22 @@ export default function Home() {
       }
 
       try {
+        speechResultReceivedRef.current = false
         recognition.start()
         speechRecognitionRef.current = recognition
-        hasSpeechAPIRef.current = true
+        // Don't set hasSpeechAPIRef=true yet — only after we receive a result.
+        hasSpeechAPIRef.current = false
+
+        // If no results arrive quickly, assume SpeechRecognition is "present but not working"
+        // and let the AI fallback provide live text.
+        setTimeout(() => {
+          if (
+            mediaRecorderRef.current?.state === 'recording' &&
+            !speechResultReceivedRef.current
+          ) {
+            hasSpeechAPIRef.current = false
+          }
+        }, 2000)
       } catch (err) {
         // If start fails (permissions / unsupported), fall back to AI chunk transcription
         console.warn('SpeechRecognition failed to start:', err)
@@ -229,8 +249,9 @@ export default function Home() {
   // --- Periodic AI chunk transcription (fallback for browsers without Web Speech API) ---
 
   const processAudioChunk = useCallback(async () => {
-    // Only run as fallback when Web Speech API is not available
-    if (hasSpeechAPIRef.current) return
+    // Only run as fallback when SpeechRecognition is actually producing results.
+    // If it's present-but-silent, we still want the AI fallback.
+    if (hasSpeechAPIRef.current && speechResultReceivedRef.current) return
     if (isProcessingChunkRef.current) return
 
     const allChunks = audioChunksRef.current
@@ -331,6 +352,7 @@ export default function Home() {
       finalizedTextRef.current = ''
       currentSessionFinalRef.current = ''
       hasSpeechAPIRef.current = false
+      speechResultReceivedRef.current = false
       isProcessingChunkRef.current = false
       lastProcessedChunkIndexRef.current = 0
       chunkTranscriptRef.current = ''
@@ -373,12 +395,9 @@ export default function Home() {
       }, 800)
 
       setIsRecording(true)
-      // If SpeechRecognition didn't start, tell the user we're using the AI fallback.
-      setStatus(
-        hasSpeechAPIRef.current
-          ? 'Recording — speak now, text appears live...'
-          : 'Recording — live preview via AI (this can be slightly delayed)'
-      )
+      // We may not know yet if SpeechRecognition will actually produce results.
+      // Default to live; if it stays silent, AI fallback will kick in within ~2s.
+      setStatus('Recording — speak now, text appears live...')
     } catch (err) {
       console.error('Failed to start recording:', err)
       setStatus(`Error: ${err instanceof Error ? err.message : String(err)}`)
