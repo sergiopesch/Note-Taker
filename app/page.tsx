@@ -50,7 +50,7 @@ export default function Home() {
 
   // Streaming: accumulate text across Web Speech API restarts
   const finalizedTextRef = useRef('')
-  const currentSessionFinalRef = useRef('')
+  const interimTextRef = useRef('')
   const hasSpeechAPIRef = useRef(false)
   // Some browsers expose SpeechRecognition but never produce results (permissions, service issues).
   // We only treat it as "working" after we actually receive a result.
@@ -61,6 +61,7 @@ export default function Home() {
   const isProcessingChunkRef = useRef(false)
   const lastProcessedChunkIndexRef = useRef(0)
   const chunkTranscriptRef = useRef('')
+  const lastChunkFullTextRef = useRef('')
 
   const loadSettings = useCallback(() => {
     const p = localStorage.getItem('ai_provider') as AIProvider
@@ -171,20 +172,20 @@ export default function Home() {
         speechResultReceivedRef.current = true
         hasSpeechAPIRef.current = true
 
-        let sessionFinal = ''
         let interim = ''
-        for (let i = 0; i < event.results.length; i++) {
+
+        // Process only the new results since last event.
+        for (let i = event.resultIndex; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript
           if (event.results[i].isFinal) {
-            sessionFinal += transcript + ' '
+            finalizedTextRef.current += transcript + ' '
           } else {
             interim += transcript
           }
         }
-        // Track this session's finalized text for carryover on restart
-        currentSessionFinalRef.current = sessionFinal
-        // Display: all previous sessions + this session's final + current interim
-        setLiveTranscript(finalizedTextRef.current + sessionFinal + interim)
+
+        interimTextRef.current = interim
+        setLiveTranscript((finalizedTextRef.current + interim).trimStart())
       }
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -204,9 +205,11 @@ export default function Home() {
       }
 
       recognition.onend = () => {
-        // Carry over this session's finalized text before restarting
-        finalizedTextRef.current += currentSessionFinalRef.current
-        currentSessionFinalRef.current = ''
+        // If SpeechRecognition stops while we have interim text, keep it (otherwise users see only a few letters).
+        if (interimTextRef.current.trim()) {
+          finalizedTextRef.current += interimTextRef.current.trim() + ' '
+          interimTextRef.current = ''
+        }
 
         if (mediaRecorderRef.current?.state === 'recording') {
           try {
@@ -219,6 +222,7 @@ export default function Home() {
 
       try {
         speechResultReceivedRef.current = false
+        interimTextRef.current = ''
         recognition.start()
         speechRecognitionRef.current = recognition
         // Don't set hasSpeechAPIRef=true yet — only after we receive a result.
@@ -257,15 +261,14 @@ export default function Home() {
     const allChunks = audioChunksRef.current
     if (allChunks.length === 0) return
 
-    const fromIndex = lastProcessedChunkIndexRef.current
-    const newChunks = allChunks.slice(fromIndex)
-    if (newChunks.length === 0) return
-
+    // Important: MediaRecorder chunks after the first often do NOT contain container headers.
+    // Sending only "new" chunks can produce invalid/undecodable audio for Whisper.
+    // For the fallback live preview, we re-send the full recording-so-far and diff text.
     isProcessingChunkRef.current = true
 
     try {
       const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm'
-      const blob = new Blob(newChunks, { type: mimeType })
+      const blob = new Blob(allChunks, { type: mimeType })
       if (blob.size === 0) return
 
       const currentProvider =
@@ -285,11 +288,20 @@ export default function Home() {
       const result = await response.json()
 
       if (response.ok && result.text?.trim()) {
-        // Advance cursor only on success
-        lastProcessedChunkIndexRef.current = fromIndex + newChunks.length
+        const full = String(result.text).trim()
+        const prevFull = lastChunkFullTextRef.current
+        lastChunkFullTextRef.current = full
 
-        // Append chunk transcription to our incremental buffer
-        const next = (chunkTranscriptRef.current + ' ' + result.text).trim()
+        // Best-effort diff: if the new transcription starts with the previous, append only the tail.
+        // Otherwise, replace the preview.
+        let next = ''
+        if (prevFull && full.toLowerCase().startsWith(prevFull.toLowerCase())) {
+          const tail = full.slice(prevFull.length).trim()
+          next = tail ? (chunkTranscriptRef.current + ' ' + tail).trim() : chunkTranscriptRef.current
+        } else {
+          next = full
+        }
+
         chunkTranscriptRef.current = next
         setLiveTranscript(next)
       }
@@ -350,12 +362,13 @@ export default function Home() {
       setLiveSegments(null)
       audioChunksRef.current = []
       finalizedTextRef.current = ''
-      currentSessionFinalRef.current = ''
+      interimTextRef.current = ''
       hasSpeechAPIRef.current = false
       speechResultReceivedRef.current = false
       isProcessingChunkRef.current = false
       lastProcessedChunkIndexRef.current = 0
       chunkTranscriptRef.current = ''
+      lastChunkFullTextRef.current = ''
       loadSettings()
 
       setStatus('Setting up audio...')
@@ -430,7 +443,7 @@ export default function Home() {
     }
 
     // Capture the live transcript before processing
-    const liveText = (finalizedTextRef.current + currentSessionFinalRef.current).trim()
+    const liveText = (finalizedTextRef.current + interimTextRef.current).trim()
 
     const audioBlob = await new Promise<Blob>((resolve) => {
       recorder.onstop = () => {
