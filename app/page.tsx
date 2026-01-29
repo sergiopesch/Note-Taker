@@ -10,6 +10,7 @@ import type { AIProvider, AudioSource } from '@/components/ui/SettingsDialog'
 import { generateSummaryAction } from '@/app/actions'
 import type { Transcription, SpeakerSegment } from '@/lib/types'
 import { SpeakerSegmentDisplay } from '@/components/ui/SpeakerSegmentDisplay'
+import { LiveSpeakerNamingCard } from '@/components/ui/LiveSpeakerNamingCard'
 import { safeGetFromStorage, safeSetInStorage } from '@/lib/storage'
 import { blobToWav } from '@/lib/wav'
 
@@ -40,6 +41,7 @@ export default function Home() {
   const [provider, setProvider] = useState<AIProvider>('openai')
   const [audioSource, setAudioSource] = useState<AudioSource>('mic')
   const [diarization, setDiarization] = useState(false)
+  const [speakerNamesLive, setSpeakerNamesLive] = useState<Record<string, string>>({})
 
   // Wrap-up countdown
   const [wrapCountdown, setWrapCountdown] = useState<number | null>(null)
@@ -65,6 +67,10 @@ export default function Home() {
   const isProcessingChunkRef = useRef(false)
   const chunkTranscriptRef = useRef('')
   const lastChunkFullTextRef = useRef('')
+
+  // Live diarization polling (when diarization setting is ON)
+  const diarizeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const isProcessingDiarizeRef = useRef(false)
 
   const loadSettings = useCallback(() => {
     const p = localStorage.getItem('ai_provider') as AIProvider
@@ -341,12 +347,73 @@ export default function Home() {
     }
   }, [])
 
+  const processLiveDiarization = useCallback(async () => {
+    if (!isRecording) return
+    const isDiarized = localStorage.getItem('diarization') === 'on'
+    if (!isDiarized) return
+    if (isProcessingDiarizeRef.current) return
+
+    const allChunks = audioChunksRef.current
+    if (allChunks.length === 0) return
+
+    isProcessingDiarizeRef.current = true
+
+    try {
+      const currentProvider =
+        (localStorage.getItem('ai_provider') as AIProvider) || 'openai'
+      const apiKey = localStorage.getItem(STORAGE_KEYS[currentProvider])
+      if (!apiKey) return
+
+      const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm'
+      const webmBlob = new Blob(allChunks, { type: mimeType })
+      if (webmBlob.size === 0) return
+
+      const formData = new FormData()
+
+      // For OpenAI diarization path, our API expects chat-audio and works best with WAV.
+      if (currentProvider === 'openai') {
+        const wavBlob = await blobToWav(webmBlob)
+        formData.append('audio', wavBlob, 'live.wav')
+      } else {
+        formData.append('audio', webmBlob, 'live.webm')
+      }
+
+      formData.append('provider', currentProvider)
+      formData.append('apiKey', apiKey)
+      formData.append('diarization', 'on')
+
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      })
+      const result = await response.json()
+
+      if (response.ok) {
+        if (result.text?.trim()) {
+          setLiveTranscript(String(result.text))
+        }
+        if (Array.isArray(result.segments) && result.segments.length > 0) {
+          setLiveSegments(result.segments as SpeakerSegment[])
+        }
+      }
+    } catch (err) {
+      console.warn('Live diarization error:', err)
+    } finally {
+      isProcessingDiarizeRef.current = false
+    }
+  }, [isRecording])
+
   // --- Cleanup ---
 
   const cleanup = () => {
     if (chunkIntervalRef.current) {
       clearInterval(chunkIntervalRef.current)
       chunkIntervalRef.current = null
+    }
+
+    if (diarizeIntervalRef.current) {
+      clearInterval(diarizeIntervalRef.current)
+      diarizeIntervalRef.current = null
     }
 
     if (wrapIntervalRef.current) {
@@ -436,6 +503,7 @@ export default function Home() {
       isProcessingChunkRef.current = false
       chunkTranscriptRef.current = ''
       lastChunkFullTextRef.current = ''
+      setSpeakerNamesLive({})
       loadSettings()
 
       if (wrapIntervalRef.current) {
@@ -479,6 +547,17 @@ export default function Home() {
         processAudioChunk()
       }, 800)
 
+      // If diarization is on, poll live diarization while recording.
+      if (localStorage.getItem('diarization') === 'on') {
+        diarizeIntervalRef.current = setInterval(() => {
+          processLiveDiarization()
+        }, 4000)
+        // fast first pass
+        setTimeout(() => {
+          processLiveDiarization()
+        }, 1800)
+      }
+
       setIsRecording(true)
       // We may not know yet if SpeechRecognition will actually produce results.
       setStatus('Recording — speak now, text appears live...')
@@ -502,6 +581,11 @@ export default function Home() {
     if (chunkIntervalRef.current) {
       clearInterval(chunkIntervalRef.current)
       chunkIntervalRef.current = null
+    }
+
+    if (diarizeIntervalRef.current) {
+      clearInterval(diarizeIntervalRef.current)
+      diarizeIntervalRef.current = null
     }
 
     if (speechRecognitionRef.current) {
@@ -662,6 +746,10 @@ export default function Home() {
         date: new Date().toLocaleString(),
         text: transcribedText,
         segments: segments && segments.length > 0 ? segments : undefined,
+        speakerNames:
+          segments && segments.length > 0
+            ? speakerNamesLive
+            : undefined,
       }
 
       if ('error' in summaryResult && summaryResult.error) {
@@ -759,7 +847,17 @@ export default function Home() {
             className="w-full border border-border rounded-lg p-4 h-48 overflow-y-auto bg-muted/50"
           >
             {liveSegments && liveSegments.length > 0 ? (
-              <SpeakerSegmentDisplay segments={liveSegments} />
+              <div className="space-y-3">
+                <LiveSpeakerNamingCard
+                  segments={liveSegments}
+                  speakerNames={speakerNamesLive}
+                  onChange={setSpeakerNamesLive}
+                />
+                <SpeakerSegmentDisplay
+                  segments={liveSegments}
+                  speakerNames={speakerNamesLive}
+                />
+              </div>
             ) : (
               <p className="text-sm text-foreground whitespace-pre-wrap">
                 {liveTranscript ? (
