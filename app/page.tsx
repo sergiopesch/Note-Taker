@@ -46,6 +46,7 @@ export default function Home() {
   // Wrap-up countdown
   const [wrapCountdown, setWrapCountdown] = useState<number | null>(null)
   const wrapIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const wrapRunIdRef = useRef(0)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -530,6 +531,9 @@ export default function Home() {
   // --- Recording lifecycle ---
 
   const cancelWrap = () => {
+    // Invalidate any in-flight wrap countdown callbacks
+    wrapRunIdRef.current += 1
+
     if (wrapIntervalRef.current) {
       clearInterval(wrapIntervalRef.current)
       wrapIntervalRef.current = null
@@ -542,11 +546,24 @@ export default function Home() {
     if (!isRecording) return
     if (wrapIntervalRef.current) return
 
+    // New wrap run
+    wrapRunIdRef.current += 1
+    const runId = wrapRunIdRef.current
+
     let remaining = 10
     setWrapCountdown(remaining)
     setStatus('Wrap-up queued. You have 10 seconds to cancel…')
 
     wrapIntervalRef.current = setInterval(() => {
+      // If another action invalidated this run (Stop/Cancel), bail.
+      if (wrapRunIdRef.current !== runId) {
+        if (wrapIntervalRef.current) {
+          clearInterval(wrapIntervalRef.current)
+          wrapIntervalRef.current = null
+        }
+        return
+      }
+
       remaining -= 1
       setWrapCountdown(remaining)
 
@@ -642,7 +659,12 @@ export default function Home() {
     }
   }
 
-  const stopRecording = async ({ generateSummary }: { generateSummary: boolean } = { generateSummary: false }) => {
+  const stopRecording = async (
+    { generateSummary }: { generateSummary: boolean } = { generateSummary: false }
+  ) => {
+    // Invalidate any wrap countdown so Stop can never accidentally trigger wrap-up.
+    wrapRunIdRef.current += 1
+
     setIsRecording(false)
 
     if (wrapIntervalRef.current) {
@@ -923,42 +945,64 @@ export default function Home() {
             )}
           </div>
 
-          <div
-            ref={transcriptionContainerRef}
-            className="w-full border border-border rounded-lg p-4 h-48 overflow-y-auto bg-muted/50"
-          >
-            {liveSegments && liveSegments.length > 0 ? (
-              <div className="space-y-3">
-                <LiveSpeakerNamingCard
-                  segments={liveSegments}
-                  speakerNames={speakerNamesLive}
-                  onChange={setSpeakerNamesLive}
-                />
+          <div className="w-full grid grid-cols-1 md:grid-cols-[1fr_320px] gap-4">
+            {/* Main transcript */}
+            <div
+              ref={transcriptionContainerRef}
+              className="border border-border rounded-lg p-4 h-56 overflow-y-auto bg-muted/50"
+            >
+              {liveSegments && liveSegments.length > 0 ? (
                 <SpeakerSegmentDisplay
                   segments={liveSegments}
                   speakerNames={speakerNamesLive}
                 />
+              ) : (
+                <p className="text-sm text-foreground whitespace-pre-wrap">
+                  {liveTranscript ? (
+                    <>
+                      {liveTranscript}
+                      {isRecording && (
+                        <span className="inline-block w-1.5 h-4 ml-0.5 bg-foreground/70 animate-pulse align-text-bottom" />
+                      )}
+                    </>
+                  ) : isRecording ? (
+                    <span className="text-muted-foreground animate-pulse">
+                      Listening... speak now
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Press Start to begin recording
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
+
+            {/* Side "Room Intel" panel */}
+            <div className="border border-border rounded-lg p-4 bg-gradient-to-b from-muted/30 to-background">
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground">
+                  Room Intel
+                </p>
+                <span className={`text-[10px] px-2 py-1 rounded-full border ${diarization ? 'border-foreground/30' : 'border-border'} text-muted-foreground`}>
+                  {diarization ? 'Listening' : 'Diarization off'}
+                </span>
               </div>
-            ) : (
-              <p className="text-sm text-foreground whitespace-pre-wrap">
-                {liveTranscript ? (
-                  <>
-                    {liveTranscript}
-                    {isRecording && (
-                      <span className="inline-block w-1.5 h-4 ml-0.5 bg-foreground/70 animate-pulse align-text-bottom" />
-                    )}
-                  </>
-                ) : isRecording ? (
-                  <span className="text-muted-foreground animate-pulse">
-                    Listening... speak now
-                  </span>
+
+              <div className="mt-3">
+                {liveSegments && liveSegments.length > 0 ? (
+                  <LiveSpeakerNamingCard
+                    segments={liveSegments}
+                    speakerNames={speakerNamesLive}
+                    onChange={setSpeakerNamesLive}
+                  />
                 ) : (
-                  <span className="text-muted-foreground">
-                    Press Start to begin recording
-                  </span>
+                  <p className="text-sm text-muted-foreground">
+                    When diarization detects speakers, I’ll ask you to name them here.
+                  </p>
                 )}
-              </p>
-            )}
+              </div>
+            </div>
           </div>
         </div>
 
