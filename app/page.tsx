@@ -12,7 +12,7 @@ import type { Transcription, SpeakerSegment } from '@/lib/types'
 import { SpeakerSegmentDisplay } from '@/components/ui/SpeakerSegmentDisplay'
 import { LiveSpeakerNamingCard } from '@/components/ui/LiveSpeakerNamingCard'
 import { safeGetFromStorage, safeSetInStorage } from '@/lib/storage'
-import { blobToWav } from '@/lib/wav'
+import { blobToWav, float32ToWav } from '@/lib/wav'
 
 const PROVIDER_LABELS: Record<AIProvider, string> = {
   openai: 'OpenAI',
@@ -53,6 +53,12 @@ export default function Home() {
   const streamsRef = useRef<MediaStream[]>([])
   const audioContextRef = useRef<AudioContext | null>(null)
   const transcriptionContainerRef = useRef<HTMLDivElement>(null)
+
+  // Live PCM buffer (used for OpenAI live diarization polling)
+  const pcmSampleRateRef = useRef<number | null>(null)
+  const pcmChunksRef = useRef<Float32Array[]>([])
+  const pcmMaxSecondsRef = useRef(12)
+  const pcmNodeRef = useRef<ScriptProcessorNode | null>(null)
 
   // Streaming transcript
   const finalizedTextRef = useRef('')
@@ -98,6 +104,45 @@ export default function Home() {
   }, [liveTranscript, liveSegments])
 
   // --- Audio capture ---
+
+  const startPcmBuffering = (stream: MediaStream) => {
+    try {
+      const audioContext = audioContextRef.current || new AudioContext()
+      audioContextRef.current = audioContext
+
+      // Reset buffer
+      pcmSampleRateRef.current = audioContext.sampleRate
+      pcmChunksRef.current = []
+
+      const source = audioContext.createMediaStreamSource(stream)
+      // ScriptProcessor is deprecated but still works in Chrome and is simplest for this use-case.
+      const processor = audioContext.createScriptProcessor(4096, 1, 1)
+      pcmNodeRef.current = processor
+
+      processor.onaudioprocess = (e) => {
+        if (mediaRecorderRef.current?.state !== 'recording') return
+
+        const input = e.inputBuffer.getChannelData(0)
+        // Copy out, since the underlying buffer is reused.
+        pcmChunksRef.current.push(new Float32Array(input))
+
+        // Trim to last N seconds
+        const sr = pcmSampleRateRef.current || audioContext.sampleRate
+        const maxSamples = Math.floor(sr * pcmMaxSecondsRef.current)
+        let total = pcmChunksRef.current.reduce((acc, a) => acc + a.length, 0)
+        while (total > maxSamples && pcmChunksRef.current.length > 1) {
+          const removed = pcmChunksRef.current.shift()
+          total -= removed ? removed.length : 0
+        }
+      }
+
+      // Connect processor (some browsers require it to be connected to output)
+      source.connect(processor)
+      processor.connect(audioContext.destination)
+    } catch (err) {
+      console.warn('PCM buffering unavailable:', err)
+    }
+  }
 
   const getAudioStream = async (): Promise<MediaStream> => {
     const source =
@@ -348,13 +393,12 @@ export default function Home() {
   }, [])
 
   const processLiveDiarization = useCallback(async () => {
-    if (!isRecording) return
+    // Use recorder state rather than React state to avoid stale closures in intervals.
+    if (mediaRecorderRef.current?.state !== 'recording') return
+
     const isDiarized = localStorage.getItem('diarization') === 'on'
     if (!isDiarized) return
     if (isProcessingDiarizeRef.current) return
-
-    const allChunks = audioChunksRef.current
-    if (allChunks.length === 0) return
 
     isProcessingDiarizeRef.current = true
 
@@ -364,17 +408,30 @@ export default function Home() {
       const apiKey = localStorage.getItem(STORAGE_KEYS[currentProvider])
       if (!apiKey) return
 
-      const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm'
-      const webmBlob = new Blob(allChunks, { type: mimeType })
-      if (webmBlob.size === 0) return
-
       const formData = new FormData()
 
-      // For OpenAI diarization path, our API expects chat-audio and works best with WAV.
       if (currentProvider === 'openai') {
-        const wavBlob = await blobToWav(webmBlob)
+        // Build a WAV from the last ~N seconds of PCM samples.
+        const sr = pcmSampleRateRef.current
+        if (!sr || pcmChunksRef.current.length === 0) return
+
+        const totalLen = pcmChunksRef.current.reduce((acc, a) => acc + a.length, 0)
+        const merged = new Float32Array(totalLen)
+        let offset = 0
+        for (const c of pcmChunksRef.current) {
+          merged.set(c, offset)
+          offset += c.length
+        }
+
+        const wavBlob = float32ToWav(merged, sr)
         formData.append('audio', wavBlob, 'live.wav')
       } else {
+        // Claude/Gemini can accept webm directly. We send the full recording-so-far.
+        const allChunks = audioChunksRef.current
+        if (allChunks.length === 0) return
+        const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm'
+        const webmBlob = new Blob(allChunks, { type: mimeType })
+        if (webmBlob.size === 0) return
         formData.append('audio', webmBlob, 'live.webm')
       }
 
@@ -395,13 +452,15 @@ export default function Home() {
         if (Array.isArray(result.segments) && result.segments.length > 0) {
           setLiveSegments(result.segments as SpeakerSegment[])
         }
+      } else if (result?.error) {
+        setStatus(`Live diarization error: ${result.error}`)
       }
     } catch (err) {
       console.warn('Live diarization error:', err)
     } finally {
       isProcessingDiarizeRef.current = false
     }
-  }, [isRecording])
+  }, [])
 
   // --- Cleanup ---
 
@@ -430,6 +489,18 @@ export default function Home() {
       }
       speechRecognitionRef.current = null
     }
+
+    // Stop PCM buffering
+    if (pcmNodeRef.current) {
+      try {
+        pcmNodeRef.current.disconnect()
+      } catch {
+        // ignore
+      }
+      pcmNodeRef.current = null
+    }
+    pcmChunksRef.current = []
+    pcmSampleRateRef.current = null
 
     if (
       mediaRecorderRef.current &&
@@ -485,8 +556,8 @@ export default function Home() {
           wrapIntervalRef.current = null
         }
         setWrapCountdown(null)
-        // Trigger stop + summary
-        stopRecording()
+        // Trigger stop + summary (wrap-up)
+        stopRecording({ generateSummary: true })
       }
     }, 1000)
   }
@@ -514,6 +585,9 @@ export default function Home() {
 
       setStatus('Setting up audio...')
       const stream = await getAudioStream()
+
+      // Start a small PCM ring buffer for truly-live diarization polling (especially for OpenAI, where partial WebM can be problematic).
+      startPcmBuffering(stream)
 
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
@@ -568,7 +642,7 @@ export default function Home() {
     }
   }
 
-  const stopRecording = async () => {
+  const stopRecording = async ({ generateSummary }: { generateSummary: boolean } = { generateSummary: false }) => {
     setIsRecording(false)
 
     if (wrapIntervalRef.current) {
@@ -691,12 +765,6 @@ export default function Home() {
         // Fall back to the live transcript if AI returned nothing
         if (liveText) {
           setLiveTranscript(liveText)
-          setStatus('Generating summary...')
-          const summaryResult = await generateSummaryAction({
-            transcriptionText: liveText,
-            provider: currentProvider,
-            apiKey,
-          })
 
           const newTranscription: Transcription = {
             id: Date.now(),
@@ -704,10 +772,21 @@ export default function Home() {
             text: liveText,
           }
 
-          if ('title' in summaryResult) {
-            newTranscription.title = summaryResult.title
-            newTranscription.summary = summaryResult.summary
-            newTranscription.nextSteps = summaryResult.nextSteps
+          if (generateSummary) {
+            setStatus('Generating summary...')
+            const summaryResult = await generateSummaryAction({
+              transcriptionText: liveText,
+              provider: currentProvider,
+              apiKey,
+            })
+
+            if ('title' in summaryResult) {
+              newTranscription.title = summaryResult.title
+              newTranscription.summary = summaryResult.summary
+              newTranscription.nextSteps = summaryResult.nextSteps
+            }
+          } else {
+            setStatus('Saved. (No wrap-up)')
           }
 
           const updated = [newTranscription, ...transcriptions]
@@ -728,19 +807,6 @@ export default function Home() {
         setLiveSegments(segments)
       }
 
-      // Build the text for summary — include speaker labels if diarized
-      const summaryInput =
-        segments && segments.length > 0
-          ? segments.map((s) => `${s.speaker}: ${s.text}`).join('\n')
-          : transcribedText
-
-      setStatus('Generating summary...')
-      const summaryResult = await generateSummaryAction({
-        transcriptionText: summaryInput,
-        provider: currentProvider,
-        apiKey,
-      })
-
       const newTranscription: Transcription = {
         id: Date.now(),
         date: new Date().toLocaleString(),
@@ -752,13 +818,28 @@ export default function Home() {
             : undefined,
       }
 
-      if ('error' in summaryResult && summaryResult.error) {
-        console.error('Summary error:', summaryResult.error)
-      }
-      if ('title' in summaryResult) {
-        newTranscription.title = summaryResult.title
-        newTranscription.summary = summaryResult.summary
-        newTranscription.nextSteps = summaryResult.nextSteps
+      if (generateSummary) {
+        // Build the text for summary — include speaker labels if diarized
+        const summaryInput =
+          segments && segments.length > 0
+            ? segments.map((s) => `${s.speaker}: ${s.text}`).join('\n')
+            : transcribedText
+
+        setStatus('Generating summary...')
+        const summaryResult = await generateSummaryAction({
+          transcriptionText: summaryInput,
+          provider: currentProvider,
+          apiKey,
+        })
+
+        if ('error' in summaryResult && summaryResult.error) {
+          console.error('Summary error:', summaryResult.error)
+        }
+        if ('title' in summaryResult) {
+          newTranscription.title = summaryResult.title
+          newTranscription.summary = summaryResult.summary
+          newTranscription.nextSteps = summaryResult.nextSteps
+        }
       }
 
       const updated = [newTranscription, ...transcriptions]
@@ -801,7 +882,7 @@ export default function Home() {
                 <Button
                   variant="outline"
                   size="lg"
-                  onClick={stopRecording}
+                  onClick={() => stopRecording({ generateSummary: false })}
                   className="rounded-full px-7"
                 >
                   <StopCircle className="w-5 h-5 mr-2" />
