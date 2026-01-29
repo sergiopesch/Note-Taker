@@ -189,6 +189,19 @@ export default function Home() {
       }
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        // Some browsers will abort recognition on focus/click/visibility transitions.
+        // If we're still recording, we want to restart immediately.
+        if ((event.error === 'aborted' || event.error === 'no-speech') && mediaRecorderRef.current?.state === 'recording') {
+          setTimeout(() => {
+            try {
+              recognition.start()
+            } catch {
+              // ignore
+            }
+          }, 250)
+          return
+        }
+
         // If speech recognition is blocked/unsupported at runtime, fall back to AI chunk transcription.
         // Common cases: user denied permission, browser doesn't support the service, etc.
         if (
