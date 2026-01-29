@@ -197,6 +197,7 @@ export default function Home() {
           event.error === 'audio-capture'
         ) {
           hasSpeechAPIRef.current = false
+          setStatus(`SpeechRecognition error: ${event.error}. Falling back to AI live preview...`)
         }
 
         if (event.error !== 'no-speech' && event.error !== 'aborted') {
@@ -212,11 +213,14 @@ export default function Home() {
         }
 
         if (mediaRecorderRef.current?.state === 'recording') {
-          try {
-            recognition.start()
-          } catch {
-            // ignore
-          }
+          // Chrome can throw if you restart immediately; a tiny delay helps.
+          setTimeout(() => {
+            try {
+              recognition.start()
+            } catch {
+              // ignore
+            }
+          }, 250)
         }
       }
 
@@ -304,6 +308,9 @@ export default function Home() {
 
         chunkTranscriptRef.current = next
         setLiveTranscript(next)
+      } else if (!response.ok && result?.error) {
+        // Surface fallback errors so we don't silently "record" with no text.
+        setStatus(`Live preview error: ${result.error}`)
       }
     } catch (err) {
       console.warn('Chunk transcription error:', err)
