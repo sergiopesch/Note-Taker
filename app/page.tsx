@@ -210,9 +210,16 @@ export default function Home() {
         }
       }
 
-      recognition.start()
-      speechRecognitionRef.current = recognition
-      hasSpeechAPIRef.current = true
+      try {
+        recognition.start()
+        speechRecognitionRef.current = recognition
+        hasSpeechAPIRef.current = true
+      } catch (err) {
+        // If start fails (permissions / unsupported), fall back to AI chunk transcription
+        console.warn('SpeechRecognition failed to start:', err)
+        hasSpeechAPIRef.current = false
+        speechRecognitionRef.current = null
+      }
     } catch {
       console.warn('SpeechRecognition is not available in this browser')
       hasSpeechAPIRef.current = false
@@ -350,17 +357,28 @@ export default function Home() {
         }
       }
 
-      recorder.start(1000)
+      // Start recording with a shorter timeslice so chunks arrive sooner for the fallback path.
+      recorder.start(500)
       startSpeechRecognition()
 
       // Start periodic AI chunk transcription (fallback when Web Speech API unavailable)
-      // Keep the interval short so "live" feels live, but the function itself is a no-op when Speech API works.
+      // Keep this fast so "live" feels live.
       chunkIntervalRef.current = setInterval(() => {
         processAudioChunk()
-      }, 3000)
+      }, 1500)
+
+      // Kick the fallback once quickly (helps the first words appear without waiting a full interval)
+      setTimeout(() => {
+        processAudioChunk()
+      }, 800)
 
       setIsRecording(true)
-      setStatus('Recording — speak now, text appears live...')
+      // If SpeechRecognition didn't start, tell the user we're using the AI fallback.
+      setStatus(
+        hasSpeechAPIRef.current
+          ? 'Recording — speak now, text appears live...'
+          : 'Recording — live preview via AI (this can be slightly delayed)'
+      )
     } catch (err) {
       console.error('Failed to start recording:', err)
       setStatus(`Error: ${err instanceof Error ? err.message : String(err)}`)
