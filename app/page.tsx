@@ -181,6 +181,16 @@ export default function Home() {
       }
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        // If speech recognition is blocked/unsupported at runtime, fall back to AI chunk transcription.
+        // Common cases: user denied permission, browser doesn't support the service, etc.
+        if (
+          event.error === 'not-allowed' ||
+          event.error === 'service-not-allowed' ||
+          event.error === 'audio-capture'
+        ) {
+          hasSpeechAPIRef.current = false
+        }
+
         if (event.error !== 'no-speech' && event.error !== 'aborted') {
           console.warn('SpeechRecognition error:', event.error)
         }
@@ -344,9 +354,10 @@ export default function Home() {
       startSpeechRecognition()
 
       // Start periodic AI chunk transcription (fallback when Web Speech API unavailable)
+      // Keep the interval short so "live" feels live, but the function itself is a no-op when Speech API works.
       chunkIntervalRef.current = setInterval(() => {
         processAudioChunk()
-      }, 10000)
+      }, 3000)
 
       setIsRecording(true)
       setStatus('Recording — speak now, text appears live...')
