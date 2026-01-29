@@ -42,6 +42,7 @@ export default function Home() {
   const [audioSource, setAudioSource] = useState<AudioSource>('mic')
   const [diarization, setDiarization] = useState(false)
   const [speakerNamesLive, setSpeakerNamesLive] = useState<Record<string, string>>({})
+  const [roomIntelDismissed, setRoomIntelDismissed] = useState(false)
 
   // Wrap-up countdown
   const [wrapCountdown, setWrapCountdown] = useState<number | null>(null)
@@ -68,6 +69,7 @@ export default function Home() {
   // Some browsers expose SpeechRecognition but never produce results (permissions, service issues).
   // We only treat it as "working" after we actually receive a result.
   const speechResultReceivedRef = useRef(false)
+  const speechBlockedRef = useRef(false)
 
   // Periodic AI chunk transcription (fallback when no Web Speech API)
   const chunkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -244,11 +246,27 @@ export default function Home() {
       }
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        // If speech recognition is blocked/unsupported at runtime, fall back to AI chunk transcription.
+        if (
+          event.error === 'not-allowed' ||
+          event.error === 'service-not-allowed' ||
+          event.error === 'audio-capture'
+        ) {
+          // Prevent infinite restart loops if the user denied permission.
+          speechBlockedRef.current = true
+          hasSpeechAPIRef.current = false
+          setStatus(
+            `SpeechRecognition permission blocked (${event.error}). Using AI live preview.`
+          )
+          return
+        }
+
         // Some browsers will abort recognition on focus/click/visibility transitions.
         // If we're still recording, we want to restart immediately.
         if (
           (event.error === 'aborted' || event.error === 'no-speech') &&
-          mediaRecorderRef.current?.state === 'recording'
+          mediaRecorderRef.current?.state === 'recording' &&
+          !speechBlockedRef.current
         ) {
           setTimeout(() => {
             try {
@@ -258,18 +276,6 @@ export default function Home() {
             }
           }, 250)
           return
-        }
-
-        // If speech recognition is blocked/unsupported at runtime, fall back to AI chunk transcription.
-        if (
-          event.error === 'not-allowed' ||
-          event.error === 'service-not-allowed' ||
-          event.error === 'audio-capture'
-        ) {
-          hasSpeechAPIRef.current = false
-          setStatus(
-            `SpeechRecognition error: ${event.error}. Falling back to AI live preview...`
-          )
         }
 
         if (event.error !== 'no-speech' && event.error !== 'aborted') {
@@ -283,6 +289,9 @@ export default function Home() {
           finalizedTextRef.current += interimTextRef.current.trim() + ' '
           interimTextRef.current = ''
         }
+
+        // Don't restart if permissions are blocked.
+        if (speechBlockedRef.current) return
 
         if (mediaRecorderRef.current?.state === 'recording') {
           // Chrome can throw if you restart immediately; a tiny delay helps.
@@ -298,6 +307,7 @@ export default function Home() {
 
       try {
         speechResultReceivedRef.current = false
+        speechBlockedRef.current = false
         interimTextRef.current = ''
         recognition.start()
         speechRecognitionRef.current = recognition
@@ -588,10 +598,12 @@ export default function Home() {
       interimTextRef.current = ''
       hasSpeechAPIRef.current = false
       speechResultReceivedRef.current = false
+      speechBlockedRef.current = false
       isProcessingChunkRef.current = false
       chunkTranscriptRef.current = ''
       lastChunkFullTextRef.current = ''
       setSpeakerNamesLive({})
+      setRoomIntelDismissed(false)
       loadSettings()
 
       if (wrapIntervalRef.current) {
@@ -654,7 +666,16 @@ export default function Home() {
       setStatus('Recording — speak now, text appears live...')
     } catch (err) {
       console.error('Failed to start recording:', err)
-      setStatus(`Error: ${err instanceof Error ? err.message : String(err)}`)
+
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('NotAllowedError') || message.toLowerCase().includes('permission')) {
+        setStatus(
+          'Microphone permission denied. Enable mic access for this site in Chrome (lock icon → Site settings → Microphone → Allow), then refresh.'
+        )
+      } else {
+        setStatus(`Error: ${message}`)
+      }
+
       cleanup()
     }
   }
@@ -990,15 +1011,18 @@ export default function Home() {
               </div>
 
               <div className="mt-3">
-                {liveSegments && liveSegments.length > 0 ? (
+                {liveSegments && liveSegments.length > 0 && !roomIntelDismissed ? (
                   <LiveSpeakerNamingCard
                     segments={liveSegments}
                     speakerNames={speakerNamesLive}
                     onChange={setSpeakerNamesLive}
+                    onClose={() => setRoomIntelDismissed(true)}
                   />
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    When diarization detects speakers, I’ll ask you to name them here.
+                    {roomIntelDismissed
+                      ? 'Room Intel hidden. Start a new recording to name speakers again.'
+                      : 'When diarization detects speakers, I’ll ask you to name them here.'}
                   </p>
                 )}
               </div>

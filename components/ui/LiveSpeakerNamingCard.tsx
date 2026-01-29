@@ -20,10 +20,12 @@ export function LiveSpeakerNamingCard({
   segments,
   speakerNames,
   onChange,
+  onClose,
 }: {
   segments: SpeakerSegment[]
   speakerNames: Record<string, string>
   onChange: (names: Record<string, string>) => void
+  onClose?: () => void
 }) {
   const speakers = useMemo(() => uniqueSpeakers(segments), [segments])
   const key = speakers.join('|') // when a new speaker appears, wizard resets to the new set
@@ -35,6 +37,7 @@ export function LiveSpeakerNamingCard({
         segments={segments}
         initialNames={speakerNames}
         onSave={onChange}
+        onClose={onClose}
       />
     </div>
   )

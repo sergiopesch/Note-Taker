@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { X } from 'lucide-react'
 import type { SpeakerSegment } from '@/lib/types'
 
 function uniqueSpeakers(segments: SpeakerSegment[]) {
@@ -22,10 +23,12 @@ export function SpeakerNameWizard({
   segments,
   initialNames,
   onSave,
+  onClose,
 }: {
   segments: SpeakerSegment[]
   initialNames?: Record<string, string>
   onSave: (names: Record<string, string>) => void
+  onClose?: () => void
 }) {
   const speakers = useMemo(() => uniqueSpeakers(segments), [segments])
 
@@ -70,8 +73,21 @@ export function SpeakerNameWizard({
             Set speaker names to make the transcript readable.
           </p>
         </div>
-        <div className="text-xs text-muted-foreground whitespace-nowrap">
-          Speaker {displayNumber} of {speakers.length}
+        <div className="flex items-center gap-2">
+          <div className="text-xs text-muted-foreground whitespace-nowrap">
+            Speaker {displayNumber} of {speakers.length}
+          </div>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Close"
+              title="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
