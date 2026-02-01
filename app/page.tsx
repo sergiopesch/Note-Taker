@@ -91,6 +91,14 @@ export default function Home() {
     setDiarization(localStorage.getItem('diarization') === 'on')
   }, [])
 
+  const deleteTranscription = useCallback((id: number) => {
+    setTranscriptions((prev) => {
+      const updated = prev.filter((t) => t.id !== id)
+      safeSetInStorage('transcriptions', updated)
+      return updated
+    })
+  }, [])
+
   // Load settings and transcriptions on mount
   useEffect(() => {
     loadSettings()
@@ -1039,7 +1047,7 @@ export default function Home() {
           </div>
         </div>
 
-        <VoiceNotes transcriptions={transcriptions} />
+        <VoiceNotes transcriptions={transcriptions} onDelete={deleteTranscription} />
       </div>
     </div>
   )

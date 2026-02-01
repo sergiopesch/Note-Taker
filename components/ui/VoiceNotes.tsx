@@ -2,18 +2,24 @@
 
 import React from 'react'
 import { useRouter } from 'next/navigation'
-import { Calendar, ArrowRight } from 'lucide-react'
+import { Calendar, ArrowRight, Trash2 } from 'lucide-react'
 import type { Transcription } from '@/lib/types'
 
 interface VoiceNotesProps {
   transcriptions: Transcription[]
+  onDelete?: (id: number) => void
 }
 
-export default function VoiceNotes({ transcriptions }: VoiceNotesProps) {
+export default function VoiceNotes({ transcriptions, onDelete }: VoiceNotesProps) {
   const router = useRouter()
 
   const handleClick = (id: number) => {
     router.push(`/transcriptions/${id}`)
+  }
+
+  const handleDelete = (e: React.MouseEvent, id: number) => {
+    e.stopPropagation()
+    onDelete?.(id)
   }
 
   if (transcriptions.length === 0) {
@@ -50,7 +56,16 @@ export default function VoiceNotes({ transcriptions }: VoiceNotesProps) {
               {item.date}
             </div>
           </div>
-          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors ml-4 flex-shrink-0" />
+          <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+            <button
+              onClick={(e) => handleDelete(e, item.id)}
+              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
+              aria-label="Delete transcription"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+          </div>
         </div>
       ))}
     </div>
