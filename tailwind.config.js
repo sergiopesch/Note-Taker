@@ -52,6 +52,10 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        "grok-accent": {
+          DEFAULT: "hsl(var(--grok-accent))",
+          muted: "hsl(var(--grok-accent-muted))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -67,10 +71,20 @@ module.exports = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: 0 },
         },
+        "pulse-grok": {
+          "0%, 100%": { opacity: 1 },
+          "50%": { opacity: 0.6 },
+        },
+        "glow-breathe": {
+          "0%, 100%": { boxShadow: "0 0 15px -3px hsl(14 100% 50% / 0.3)" },
+          "50%": { boxShadow: "0 0 25px -3px hsl(14 100% 50% / 0.5)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "pulse-grok": "pulse-grok 2s ease-in-out infinite",
+        "glow-breathe": "glow-breathe 2.5s ease-in-out infinite",
       },
     },
   },

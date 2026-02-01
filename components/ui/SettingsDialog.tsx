@@ -114,7 +114,10 @@ export function SettingsDialog({ onSettingsChange }: SettingsDialogProps) {
             </DialogTrigger>
             <DialogContent className="sm:max-w-[440px]">
                 <DialogHeader>
-                    <DialogTitle>Settings</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-primary inline-block" />
+                        Settings
+                    </DialogTitle>
                     <DialogDescription>
                         Configure your AI provider, API key, and audio source. Keys are stored locally in your browser.
                     </DialogDescription>

@@ -1,6 +1,19 @@
 // app/layout.tsx
 
 import '@/app/globals.css';
+import localFont from 'next/font/local';
+
+const geist = localFont({
+  src: './fonts/GeistVF.woff',
+  variable: '--font-geist',
+  display: 'swap',
+});
+
+const geistMono = localFont({
+  src: './fonts/GeistMonoVF.woff',
+  variable: '--font-geist-mono',
+  display: 'swap',
+});
 
 export const metadata = {
   title: 'Note Taker',
@@ -26,11 +39,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${geist.variable} ${geistMono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body suppressHydrationWarning>{children}</body>
+      <body className={geist.className} suppressHydrationWarning>{children}</body>
     </html>
   );
 }
