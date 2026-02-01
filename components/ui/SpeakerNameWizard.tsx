@@ -60,7 +60,7 @@ export function SpeakerNameWizard({
   }
 
   return (
-    <div className="w-full border border-border rounded-xl p-4 bg-gradient-to-b from-muted/40 to-background">
+    <div className="w-full border border-border rounded-xl p-4 bg-gradient-to-b from-card/60 to-background">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-widest text-muted-foreground">

@@ -900,14 +900,15 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-8 font-sans flex flex-col items-center justify-center bg-background relative">
+    <div className="min-h-screen p-4 sm:p-8 flex flex-col items-center justify-center bg-background relative transition-colors duration-300">
       <div className="absolute top-4 right-4 flex items-center gap-2">
         <ThemeToggle />
         <SettingsDialog onSettingsChange={loadSettings} />
       </div>
       <div className="w-full max-w-2xl">
         <div className="flex flex-col items-center mb-12">
-          <h1 className="text-4xl font-bold tracking-tight mb-1">Note Taker</h1>
+          <h1 className="text-4xl font-bold tracking-tight mb-2">Note Taker</h1>
+          <div className="h-0.5 w-10 bg-primary rounded-full mb-3" />
           <p className="text-sm text-muted-foreground">
             {SOURCE_LABELS[audioSource]} &middot; {PROVIDER_LABELS[provider]}
             {diarization && ' \u00b7 Speakers'}
@@ -926,7 +927,7 @@ export default function Home() {
                   variant="outline"
                   size="lg"
                   onClick={() => stopRecording({ generateSummary: false })}
-                  className="rounded-full px-7"
+                  className="rounded-full px-7 border-border/60"
                 >
                   <StopCircle className="w-5 h-5 mr-2" />
                   Stop
@@ -936,7 +937,7 @@ export default function Home() {
                   size="lg"
                   onClick={startWrapCountdown}
                   disabled={wrapCountdown !== null}
-                  className="rounded-full px-7"
+                  className="rounded-full px-7 animate-glow-breathe"
                 >
                   <Sparkles className="w-5 h-5 mr-2" />
                   {wrapCountdown !== null ? `Wrap it (${wrapCountdown})` : 'Wrap it'}
@@ -958,7 +959,7 @@ export default function Home() {
               <Button
                 size="lg"
                 onClick={startRecording}
-                className="rounded-full px-8"
+                className="rounded-full px-8 glow-accent-sm hover:glow-accent transition-shadow duration-300"
               >
                 <Mic className="w-5 h-5 mr-2" />
                 Start Recording
@@ -970,7 +971,11 @@ export default function Home() {
             {/* Main transcript */}
             <div
               ref={transcriptionContainerRef}
-              className="border border-border rounded-lg p-4 h-56 overflow-y-auto bg-muted/50"
+              className={`border rounded-lg p-4 h-56 overflow-y-auto bg-card/50 transition-all duration-500 ${
+                isRecording
+                  ? 'border-primary/30 glow-accent-sm'
+                  : 'border-border'
+              }`}
             >
               {liveSegments && liveSegments.length > 0 ? (
                 <SpeakerSegmentDisplay
@@ -983,11 +988,11 @@ export default function Home() {
                     <>
                       {liveTranscript}
                       {isRecording && (
-                        <span className="inline-block w-1.5 h-4 ml-0.5 bg-foreground/70 animate-pulse align-text-bottom" />
+                        <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary animate-pulse-grok align-text-bottom rounded-sm" />
                       )}
                     </>
                   ) : isRecording ? (
-                    <span className="text-muted-foreground animate-pulse">
+                    <span className="text-muted-foreground animate-pulse-grok">
                       Listening... speak now
                     </span>
                   ) : (
@@ -1000,12 +1005,16 @@ export default function Home() {
             </div>
 
             {/* Side "Room Intel" panel */}
-            <div className="border border-border rounded-lg p-4 bg-gradient-to-b from-muted/30 to-background">
+            <div className="border border-border rounded-lg p-4 bg-gradient-to-b from-card/60 to-background">
               <div className="flex items-center justify-between">
                 <p className="text-xs uppercase tracking-widest text-muted-foreground">
                   Room Intel
                 </p>
-                <span className={`text-[10px] px-2 py-1 rounded-full border ${diarization ? 'border-foreground/30' : 'border-border'} text-muted-foreground`}>
+                <span className={`text-[10px] px-2 py-1 rounded-full border ${
+                  diarization
+                    ? 'border-primary/40 text-primary'
+                    : 'border-border text-muted-foreground'
+                }`}>
                   {diarization ? 'Listening' : 'Diarization off'}
                 </span>
               </div>
@@ -1022,7 +1031,7 @@ export default function Home() {
                   <p className="text-sm text-muted-foreground">
                     {roomIntelDismissed
                       ? 'Room Intel hidden. Start a new recording to name speakers again.'
-                      : 'When diarization detects speakers, I’ll ask you to name them here.'}
+                      : 'When diarization detects speakers, I\u2019ll ask you to name them here.'}
                   </p>
                 )}
               </div>

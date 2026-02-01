@@ -75,7 +75,7 @@ export default function TranscriptionDetail() {
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-8 font-sans flex items-start justify-center bg-background relative">
+    <div className="min-h-screen p-4 sm:p-8 flex items-start justify-center bg-background relative transition-colors duration-300">
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
@@ -98,7 +98,7 @@ export default function TranscriptionDetail() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 onBlur={saveTitle}
-                className="w-full text-3xl font-bold bg-transparent border-0 border-b border-border focus:outline-none focus:border-foreground pb-2 placeholder:text-muted-foreground"
+                className="w-full text-3xl font-bold bg-transparent border-0 border-b border-border focus:outline-none focus:border-primary pb-2 placeholder:text-muted-foreground transition-colors duration-200"
                 placeholder="Untitled"
               />
               <p className="text-sm text-muted-foreground mt-2">
@@ -108,10 +108,11 @@ export default function TranscriptionDetail() {
 
             {/* Transcription */}
             <section>
-              <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3">
+              <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
                 Transcription
                 {transcription.segments && transcription.segments.length > 0 && (
-                  <span className="ml-2 text-[10px] font-normal normal-case tracking-normal text-muted-foreground/70">
+                  <span className="ml-1 text-[10px] font-normal normal-case tracking-normal text-muted-foreground/70">
                     ({new Set(transcription.segments.map(s => s.speaker)).size} speakers)
                   </span>
                 )}
@@ -125,7 +126,7 @@ export default function TranscriptionDetail() {
                   />
                 )}
 
-                <div className="border border-border rounded-lg p-4 bg-muted/50">
+                <div className="border border-border rounded-lg p-4 bg-card/50">
                   {transcription.segments && transcription.segments.length > 0 ? (
                     <SpeakerSegmentDisplay
                       segments={transcription.segments}
@@ -143,10 +144,11 @@ export default function TranscriptionDetail() {
             {/* Summary */}
             {summary ? (
               <section>
-                <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3">
+                <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary/60 inline-block" />
                   Summary
                 </h2>
-                <div className="border border-border rounded-lg p-4 bg-muted/50">
+                <div className="border border-border rounded-lg p-4 bg-card/50">
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">
                     {summary}
                   </p>
@@ -161,10 +163,11 @@ export default function TranscriptionDetail() {
             {/* Next Steps */}
             {nextSteps ? (
               <section>
-                <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3">
+                <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary/40 inline-block" />
                   Next Steps
                 </h2>
-                <div className="border border-border rounded-lg p-4 bg-muted/50">
+                <div className="border border-border rounded-lg p-4 bg-card/50">
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">
                     {nextSteps}
                   </p>

@@ -29,7 +29,7 @@ export default function VoiceNotes({ transcriptions }: VoiceNotesProps) {
       {transcriptions.map((item) => (
         <div
           key={item.id}
-          className="group flex items-center justify-between p-4 border border-border rounded-lg cursor-pointer hover:bg-accent transition-colors"
+          className="group flex items-center justify-between p-4 border border-border rounded-lg cursor-pointer hover:bg-accent hover:border-primary/20 transition-all duration-200"
           onClick={() => handleClick(item.id)}
         >
           <div className="min-w-0 flex-1">
@@ -50,7 +50,7 @@ export default function VoiceNotes({ transcriptions }: VoiceNotesProps) {
               {item.date}
             </div>
           </div>
-          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors ml-4 flex-shrink-0" />
+          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors ml-4 flex-shrink-0" />
         </div>
       ))}
     </div>

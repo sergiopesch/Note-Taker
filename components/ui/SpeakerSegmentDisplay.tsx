@@ -3,13 +3,13 @@
 import React from 'react'
 import type { SpeakerSegment } from '@/lib/types'
 
-// Grayscale-based speaker colors that work in both light and dark modes
+// Speaker colors with accent-inspired palette
 const SPEAKER_STYLES: { label: string; border: string }[] = [
+  { label: 'text-primary font-semibold', border: 'border-l-primary' },
   { label: 'text-foreground font-semibold', border: 'border-l-foreground' },
+  { label: 'text-grok-accent-muted font-semibold', border: 'border-l-grok-accent-muted' },
   { label: 'text-muted-foreground font-semibold', border: 'border-l-muted-foreground' },
-  { label: 'text-foreground/70 font-semibold', border: 'border-l-foreground/70' },
-  { label: 'text-muted-foreground/80 font-semibold', border: 'border-l-muted-foreground/80' },
-  { label: 'text-foreground/50 font-semibold', border: 'border-l-foreground/50' },
+  { label: 'text-foreground/60 font-semibold', border: 'border-l-foreground/60' },
 ]
 
 function getSpeakerStyle(speakerIndex: number) {
