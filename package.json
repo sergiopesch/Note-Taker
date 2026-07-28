@@ -18,48 +18,39 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.554.0",
-    "next": "16.2.6",
+    "next": "16.2.12",
     "openai": "^6.9.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "shadcn-ui": "^0.2.3",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@eslint-react/eslint-plugin": "5.18.0",
+    "@eslint/js": "10.0.1",
+    "@next/eslint-plugin-next": "16.2.12",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "eslint": "^9.39.1",
-    "eslint-config-next": "^16.2.6",
-    "postcss": "8.5.10",
+    "eslint": "10.8.0",
+    "eslint-plugin-import-x": "4.17.1",
+    "eslint-plugin-jsx-a11y-x": "0.2.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.8.0",
+    "postcss": "8.5.24",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5"
+    "typescript": "^5",
+    "typescript-eslint": "8.65.0"
   },
   "overrides": {
-    "postcss": "8.5.10",
+    "postcss": "8.5.24",
     "ajv": "6.14.0",
     "diff": "5.2.2",
     "flatted": "3.4.2",
-    "js-yaml": "4.1.1",
+    "js-yaml": "4.3.0",
+    "sharp": "0.35.3",
     "yaml": "2.8.3",
-    "@eslint/config-array": {
-      "minimatch": "3.1.4"
-    },
-    "@eslint/eslintrc": {
-      "minimatch": "3.1.4"
-    },
-    "eslint": {
-      "minimatch": "3.1.4"
-    },
-    "@ts-morph/common": {
-      "minimatch": "7.4.8"
-    },
-    "@typescript-eslint/typescript-estree": {
-      "minimatch": "9.0.7"
-    },
-    "brace-expansion@^1.1.7": "1.1.13",
     "micromatch": {
       "picomatch": "2.3.2"
     },
