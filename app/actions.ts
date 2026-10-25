@@ -8,7 +8,7 @@ const requestSchema = z.object({
         .min(1, 'Transcription text is required')
         .max(15000, 'Transcription text is too long'),
     provider: z.enum(['openai', 'claude', 'gemini']).default('openai'),
-    apiKey: z.string().optional(),
+    apiKey: z.string().trim().min(1, 'API key is required'),
 })
 
 export async function generateSummaryAction(data: {
@@ -19,7 +19,7 @@ export async function generateSummaryAction(data: {
     try {
         const result = requestSchema.safeParse(data)
         if (!result.success) {
-            return { error: result.error.errors[0].message }
+            return { error: result.error.issues[0].message }
         }
 
         const { transcriptionText, provider, apiKey } = result.data
@@ -89,8 +89,8 @@ function parseJsonSummary(content: string): {
     }
 }
 
-async function summarizeWithOpenAI(prompt: string, apiKey?: string) {
-    const key = apiKey || process.env.OPENAI_API_KEY
+async function summarizeWithOpenAI(prompt: string, apiKey: string) {
+    const key = apiKey
     if (!key) return { error: 'OpenAI API key is missing' }
 
     const maxRetries = 3
@@ -140,8 +140,8 @@ async function summarizeWithOpenAI(prompt: string, apiKey?: string) {
     return { error: 'OpenAI rate limit exceeded. Please try again later.' }
 }
 
-async function summarizeWithClaude(prompt: string, apiKey?: string) {
-    const key = apiKey || process.env.CLAUDE_API_KEY
+async function summarizeWithClaude(prompt: string, apiKey: string) {
+    const key = apiKey
     if (!key) return { error: 'Claude API key is missing' }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -173,8 +173,8 @@ async function summarizeWithClaude(prompt: string, apiKey?: string) {
     return parseJsonSummary(content)
 }
 
-async function summarizeWithGemini(prompt: string, apiKey?: string) {
-    const key = apiKey || process.env.GEMINI_API_KEY
+async function summarizeWithGemini(prompt: string, apiKey: string) {
+    const key = apiKey
     if (!key) return { error: 'Gemini API key is missing' }
 
     const response = await fetch(
